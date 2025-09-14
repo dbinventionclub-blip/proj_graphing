@@ -1,61 +1,56 @@
+# backend.py
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+from flask import Flask, request, jsonify
 from sklearn.linear_model import LinearRegression
+import plotly.graph_objects as go
+import json
 
-def regression_demo(file_path, x_col, y_col, degree=1):
-    """
-    file_path: path to CSV or Excel file
-    x_col: name of column to use as X
-    y_col: name of column to use as Y
-    degree: polynomial degree (1 = linear, 2 = quadratic, etc.)
-    """
-    # Read spreadsheet (CSV or Excel)
-    if file_path.endswith(".csv"):
-        df = pd.read_csv(file_path)
-    else:
-        df = pd.read_excel(file_path)
+app = Flask(__name__)
 
-    # Drop rows with missing data in chosen columns
+def make_regression_plot(df, x_col, y_col, degree=1):
     df = df[[x_col, y_col]].dropna()
-
-    # Prepare data
     X = df[[x_col]].values
     y = df[y_col].values
 
-    # Polynomial features
+    # Polynomial regression
     X_poly = np.vander(X.flatten(), N=degree+1, increasing=True)
-
-    # Fit regression
     model = LinearRegression().fit(X_poly, y)
     y_pred = model.predict(X_poly)
 
-    # Plot
-    plt.figure(figsize=(7,5))
-    plt.scatter(X, y, color="blue", label="Data")
-    plt.plot(X, y_pred, color="red", linewidth=2, label=f"Degree {degree} fit")
-    plt.xlabel(x_col)
-    plt.ylabel(y_col)
-    plt.title(f"Regression of {y_col} vs {x_col}")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    # Build Plotly figure
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=X.flatten(), y=y, mode="markers", name="Data"))
+    fig.add_trace(go.Scatter(x=X.flatten(), y=y_pred, mode="lines", name=f"Degree {degree} fit", line=dict(color="red")))
+    fig.update_layout(title=f"Regression of {y_col} vs {x_col}",
+                      xaxis_title=x_col,
+                      yaxis_title=y_col,
+                      template="plotly_white")
 
-    # Print model details
-    print("Coefficients:", model.coef_)
-    print("Intercept:", model.intercept_)
+    # Convert figure to JSON (so frontend can render it)
+    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder), model.coef_.tolist(), model.intercept_
 
+@app.route("/regression", methods=["POST"])
+def regression():
+    # Expect a CSV file + parameters from frontend
+    file = request.files["file"]
+    x_col = request.form.get("x_col")
+    y_col = request.form.get("y_col")
+    degree = int(request.form.get("degree", 1))
 
-# ---------------------------
-# DEMO USAGE (with fake data)
-# ---------------------------
-if __name__ == "__main__":
-    # Create a demo dataset and save to CSV
-    demo_data = pd.DataFrame({
-        "time": np.arange(1, 11),
-        "score": [2.1, 3.9, 6.2, 7.8, 10.5, 12.2, 14.1, 16.5, 18.7, 20.1]
+    # Load into pandas
+    if file.filename.endswith(".csv"):
+        df = pd.read_csv(file)
+    else:
+        df = pd.read_excel(file)
+
+    fig_json, coeffs, intercept = make_regression_plot(df, x_col, y_col, degree)
+
+    return jsonify({
+        "figure": json.loads(fig_json),
+        "coefficients": coeffs,
+        "intercept": intercept
     })
-    demo_data.to_csv("demo.csv", index=False)
 
-    # Run regression demo
-    regression_demo("demo.csv", "time", "score", degree=1)
+if __name__ == "__main__":
+    app.run(debug=True)
