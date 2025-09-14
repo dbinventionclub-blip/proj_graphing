@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Regression Tool</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+  <h2>Upload Data for Regression</h2>
+  <form id="uploadForm">
+    <input type="file" name="file" id="fileInput" required><br><br>
+    <label>X column: <input type="text" name="x_col" value="time"></label><br>
+    <label>Y column: <input type="text" name="y_col" value="score"></label><br>
+    <label>Degree: <input type="number" name="degree" value="1"></label><br><br>
+    <button type="submit">Run Regression</button>
+  </form>
+
+  <h3>Graph:</h3>
+  <div id="plot"></div>
+
+  <script>
+    document.getElementById("uploadForm").addEventListener("submit", async function(e) {
+      e.preventDefault();
+
+      let formData = new FormData(document.getElementById("uploadForm"));
+
+      let response = await fetch("http://127.0.0.1:5000/regression", {
+        method: "POST",
+        body: formData
+      });
+
+      let data = await response.json();
+
+      // Render graph
+      Plotly.newPlot("plot", data.figure.data, data.figure.layout);
+
+      console.log("Coefficients:", data.coefficients);
+      console.log("Intercept:", data.intercept);
+    });
+  </script>
+</body>
+</html>
