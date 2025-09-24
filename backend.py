@@ -120,3 +120,5 @@ def regression():
 if __name__ == "__main__":
     app.run(debug=True)
 
+#python backend.py
+#python -m http.server 8000
