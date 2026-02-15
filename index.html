@@ -3,6 +3,17 @@
 <head>
   <title>Regression Tool</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    #equation {
+      font-size: 1.5rem;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
   <h2>Upload Data for Regression</h2>
@@ -13,7 +24,7 @@
     <label>Degree: <input type="number" name="degree" value="1"></label><br><br>
     <button type="submit">Run Regression</button>
   </form>
-
+  <div id="equation">modeled as: </div>
   <h3>Graph:</h3>
   <div id="plot"></div>
 
@@ -21,28 +32,91 @@
     document.getElementById("uploadForm").addEventListener("submit", async function(e) {
       e.preventDefault();
 
-      let formData = new FormData(document.getElementById("uploadForm"));
+      const form = document.getElementById("uploadForm");
+      const formData = new FormData(form);
 
-      let response = await fetch("http://127.0.0.1:5000/regression", {
+      const response = await fetch("http://127.0.0.1:5000/regression", {
         method: "POST",
         body: formData
       });
 
-      let data = await response.json();
+      const data = await response.json();
 
-      console.log("Full response:", data);
-      console.log("Figure object:", data.figure);
-      console.log("Trace[0] X:", data.figure.data[0].x);
-      console.log("Trace[0] Y:", data.figure.data[0].y);
+      if (!response.ok) {
+        alert(data.error || "Regression failed");
+        return;
+      }
 
+      const xCol = formData.get("x_col");
+      const yCol = formData.get("y_col");
+      const degree = data.degree;
 
+      Plotly.newPlot("plot", [
+        {
+          x: data.x_data,
+          y: data.y_data,
+          mode: "markers",
+          name: "Data",
+          marker: { color: "blue", size: 6 }
+        },
+        {
+          x: data.x_curve,
+          y: data.y_curve,
+          mode: "lines",
+          name: `Degree ${degree} fit`,
+          line: { color: "red" }
+        }
+      ], {
+        title: `Regression of ${yCol} vs ${xCol}`,
+        xaxis: { title: xCol },
+        yaxis: { title: yCol },
+        template: "plotly_white"
+      });
 
-      // Render graph (pass full figure)
-      Plotly.newPlot("plot", data.figure);
+      const coeffs = data.coefficients || [];
+      const DISPLAY_DIGITS = 3;
+      const terms = [];
 
+      for (let i = 0; i < coeffs.length; i++) {
+        // Base sign/zero checks on displayed precision, not raw float noise.
+        const rounded = Number(coeffs[i].toFixed(DISPLAY_DIGITS));
+        if (rounded === 0) continue;
 
-      console.log("Coefficients:", data.coefficients);
-      console.log("Intercept:", data.intercept);
+        const absCoeff = Math.abs(rounded);
+        const absCoeffStr = absCoeff.toFixed(DISPLAY_DIGITS);
+        const sign = rounded < 0 ? -1 : 1;
+
+        let termBody = "";
+        if (i === 0) {
+          termBody = absCoeffStr;
+        } else {
+          termBody = Math.abs(absCoeff - 1) < Number.EPSILON ? "x" : `${absCoeffStr}x`;
+          if (i > 1) termBody += `^${i}`;
+        }
+
+        terms.push({ sign, termBody });
+      }
+
+      let equationStr = "y = ";
+      if (terms.length === 0) {
+        equationStr += "0";
+      } else {
+        equationStr += terms
+          .slice()
+          .reverse()
+          .map((t, idx) => {
+            if (idx === 0) return t.sign < 0 ? `-${t.termBody}` : t.termBody;
+            return t.sign < 0 ? ` - ${t.termBody}` : ` + ${t.termBody}`;
+          })
+          .join("");
+      }
+
+      const mathJaxElement = `$$${equationStr}$$`;
+      document.getElementById("equation").innerHTML = "equation: " + mathJaxElement;
+
+      if (window.MathJax) {
+        MathJax.typesetPromise();
+      }
     });
   </script>
 </body>
