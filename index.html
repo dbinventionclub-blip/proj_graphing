@@ -1,34 +1,89 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Regression Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
-    #equation {
-      font-size: 1.5rem;
-      margin-top: 10px;
-    }
-  </style>
 </head>
 <body>
-  <h2>Upload Data for Regression</h2>
-  <form id="uploadForm">
-    <input type="file" name="file" id="fileInput" required><br><br>
-    <label>X column: <input type="text" name="x_col" value="time"></label><br>
-    <label>Y column: <input type="text" name="y_col" value="score"></label><br>
-    <label>Degree: <input type="number" name="degree" value="1"></label><br><br>
-    <button type="submit">Run Regression</button>
-  </form>
-  <div id="equation">modeled as: </div>
-  <h3>Graph:</h3>
-  <div id="plot"></div>
+  <main class="page">
+    <section class="hero">
+      <h1>Regression Graphing Studio</h1>
+      <p>Upload a dataset, pick a model, and visualize fitted curves with equation output.</p>
+    </section>
+
+    <section class="content">
+      <aside class="card panel">
+        <h2>Run Regression</h2>
+        <p class="form-hint">Supports CSV and Excel files. Use your exact column names for X and Y.</p>
+        <p style="font-weight: bold;">X and Y columns must have EXACT NAMES as in the uploaded file.</p>
+        <form id="uploadForm">
+          <div class="field">
+            <label for="fileInput">Data File</label>
+            <input type="file" name="file" id="fileInput" required>
+          </div>
+
+          <div class="field">
+            <label for="xColInput">X Column</label>
+            <input id="xColInput" type="text" name="x_col" value="time">
+          </div>
+
+          <div class="field">
+            <label for="yColInput">Y Column</label>
+            <input id="yColInput" type="text" name="y_col" value="score">
+          </div>
+
+          <div class="field">
+            <label for="modelType">Model</label>
+            <select name="model_type" id="modelType">
+              <option value="polynomial">Polynomial</option>
+              <option value="inverse">Inverse Proportional (x^-n)</option>
+              <option value="exponential">Exponential (base e)</option>
+            </select>
+          </div>
+
+          <div class="field" id="degreeLabel">
+            <label for="degreeInput">Degree / n</label>
+            <input type="number" name="degree" id="degreeInput" value="1" min="1">
+          </div>
+
+          <button type="submit">Run Regression</button>
+        </form>
+      </aside>
+
+      <section class="card plot-shell">
+        <div class="plot-header">
+          <h2>Graph Output</h2>
+        </div>
+        <div class="equation-wrap">
+          <div id="equation">modeled as:</div>
+        </div>
+        <div id="plot"></div>
+      </section>
+    </section>
+  </main>
 
   <script>
+    const modelTypeEl = document.getElementById("modelType");
+    const degreeLabelEl = document.getElementById("degreeLabel");
+    const degreeInputEl = document.getElementById("degreeInput");
+
+    function syncDegreeVisibility() {
+      const modelType = modelTypeEl.value;
+      const needsDegree = modelType !== "exponential";
+      degreeLabelEl.style.display = needsDegree ? "block" : "none";
+      degreeInputEl.disabled = !needsDegree;
+    }
+
+    syncDegreeVisibility();
+    modelTypeEl.addEventListener("change", syncDegreeVisibility);
+
     document.getElementById("uploadForm").addEventListener("submit", async function(e) {
       e.preventDefault();
 
@@ -49,7 +104,13 @@
 
       const xCol = formData.get("x_col");
       const yCol = formData.get("y_col");
+      const modelType = data.model_type || formData.get("model_type") || "polynomial";
       const degree = data.degree;
+      const curveName = modelType === "polynomial"
+        ? `Degree ${degree} fit`
+        : modelType === "inverse"
+          ? `Inverse n=${degree} fit`
+          : "Exponential fit";
 
       Plotly.newPlot("plot", [
         {
@@ -63,7 +124,7 @@
           x: data.x_curve,
           y: data.y_curve,
           mode: "lines",
-          name: `Degree ${degree} fit`,
+          name: curveName,
           line: { color: "red" }
         }
       ], {
@@ -73,42 +134,82 @@
         template: "plotly_white"
       });
 
-      const coeffs = data.coefficients || [];
       const DISPLAY_DIGITS = 3;
-      const terms = [];
+      const absCoeffOneEps = 1e-12;
 
-      for (let i = 0; i < coeffs.length; i++) {
-        // Base sign/zero checks on displayed precision, not raw float noise.
-        const rounded = Number(coeffs[i].toFixed(DISPLAY_DIGITS));
-        if (rounded === 0) continue;
-
-        const absCoeff = Math.abs(rounded);
-        const absCoeffStr = absCoeff.toFixed(DISPLAY_DIGITS);
-        const sign = rounded < 0 ? -1 : 1;
-
-        let termBody = "";
-        if (i === 0) {
-          termBody = absCoeffStr;
-        } else {
-          termBody = Math.abs(absCoeff - 1) < Number.EPSILON ? "x" : `${absCoeffStr}x`;
-          if (i > 1) termBody += `^${i}`;
-        }
-
-        terms.push({ sign, termBody });
+      function formatSignedTerms(terms) {
+        if (terms.length === 0) return "0";
+        return terms.map((t, idx) => {
+          if (idx === 0) return t.sign < 0 ? `-${t.body}` : t.body;
+          return t.sign < 0 ? ` - ${t.body}` : ` + ${t.body}`;
+        }).join("");
       }
 
-      let equationStr = "y = ";
-      if (terms.length === 0) {
-        equationStr += "0";
+      function polynomialEquation(coeffs) {
+        const terms = [];
+        for (let i = coeffs.length - 1; i >= 0; i--) {
+          const rounded = Number(coeffs[i].toFixed(DISPLAY_DIGITS));
+          if (rounded === 0) continue;
+
+          const absCoeff = Math.abs(rounded);
+          const absCoeffStr = absCoeff.toFixed(DISPLAY_DIGITS);
+          const sign = rounded < 0 ? -1 : 1;
+
+          let body = "";
+          if (i === 0) {
+            body = absCoeffStr;
+          } else if (i === 1) {
+            body = Math.abs(absCoeff - 1) < absCoeffOneEps ? "x" : `${absCoeffStr}x`;
+          } else {
+            body = Math.abs(absCoeff - 1) < absCoeffOneEps ? `x^{${i}}` : `${absCoeffStr}x^{${i}}`;
+          }
+
+          terms.push({ sign, body });
+        }
+        return `y = ${formatSignedTerms(terms)}`;
+      }
+
+      function inverseEquation(coeffs) {
+        const terms = [];
+        for (let i = 0; i < coeffs.length; i++) {
+          const rounded = Number(coeffs[i].toFixed(DISPLAY_DIGITS));
+          if (rounded === 0) continue;
+
+          const absCoeff = Math.abs(rounded);
+          const absCoeffStr = absCoeff.toFixed(DISPLAY_DIGITS);
+          const sign = rounded < 0 ? -1 : 1;
+
+          let body = "";
+          if (i === 0) {
+            body = absCoeffStr;
+          } else if (i === 1) {
+            body = Math.abs(absCoeff - 1) < absCoeffOneEps ? "x^{-1}" : `${absCoeffStr}x^{-1}`;
+          } else {
+            body = Math.abs(absCoeff - 1) < absCoeffOneEps ? `x^{-${i}}` : `${absCoeffStr}x^{-${i}}`;
+          }
+
+          terms.push({ sign, body });
+        }
+        return `y = ${formatSignedTerms(terms)}`;
+      }
+
+      function exponentialEquation(expParams) {
+        const a = Number((expParams?.a ?? 0).toFixed(DISPLAY_DIGITS));
+        const b = Number((expParams?.b ?? 0).toFixed(DISPLAY_DIGITS));
+        const aStr = a.toFixed(DISPLAY_DIGITS);
+        if (b === 0) return `y = ${aStr}`;
+        const bStr = Math.abs(b).toFixed(DISPLAY_DIGITS);
+        const exponent = b < 0 ? `-${bStr}x` : `${bStr}x`;
+        return `y = ${aStr}e^{${exponent}}`;
+      }
+
+      let equationStr = "y = 0";
+      if (modelType === "inverse") {
+        equationStr = inverseEquation(data.coefficients || []);
+      } else if (modelType === "exponential") {
+        equationStr = exponentialEquation(data.exp_params || {});
       } else {
-        equationStr += terms
-          .slice()
-          .reverse()
-          .map((t, idx) => {
-            if (idx === 0) return t.sign < 0 ? `-${t.termBody}` : t.termBody;
-            return t.sign < 0 ? ` - ${t.termBody}` : ` + ${t.termBody}`;
-          })
-          .join("");
+        equationStr = polynomialEquation(data.coefficients || []);
       }
 
       const mathJaxElement = `$$${equationStr}$$`;
