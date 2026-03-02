@@ -12,6 +12,20 @@ from sklearn.preprocessing import PolynomialFeatures
 app = Flask(__name__)
 CORS(app)
 
+@app.route("/", methods=["GET"])
+def root():
+    return jsonify({
+        "status": "ok",
+        "service": "CurveCraft backend",
+        "endpoints": {
+            "regression": "/regression (POST)"
+        }
+    }), 200
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "healthy"}), 200
+
 
 def load_df(file):
     name = (file.filename or "").lower()
