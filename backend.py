@@ -1,26 +1,25 @@
 # backend.py
 import pandas as pd
 import numpy as np
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 import plotly
 from sklearn.linear_model import LinearRegression
 import plotly.graph_objects as go
 import json
 from flask_cors import CORS
 from sklearn.preprocessing import PolynomialFeatures
+import os
 
 app = Flask(__name__)
 CORS(app)
 
 @app.route("/", methods=["GET"])
 def root():
-    return jsonify({
-        "status": "ok",
-        "service": "CurveCraft backend",
-        "endpoints": {
-            "regression": "/regression (POST)"
-        }
-    }), 200
+    return send_from_directory(os.path.dirname(__file__), "index.html")
+
+@app.route("/styles.css", methods=["GET"])
+def styles():
+    return send_from_directory(os.path.dirname(__file__), "styles.css")
 
 @app.route("/health", methods=["GET"])
 def health():
