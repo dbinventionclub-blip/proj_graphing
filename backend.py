@@ -62,7 +62,7 @@ def make_regression_plot(df, x_col, y_col, degree=1):
     '''
     fig = go.Figure()
     fig.update_layout(
-        title=f"Regression of {y_col} vs {x_col}",
+        title=f"{y_col} vs {x_col}",
         xaxis_title=x_col,
         yaxis_title=y_col,
         template="plotly_white",
