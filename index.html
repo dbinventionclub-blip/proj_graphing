@@ -20,18 +20,18 @@
   <main class="page">
     <section class="hero">
       <h1>Regression Graphing Studio</h1>
-      <p>Upload a dataset, pick a model, and visualize fitted curves with equation output.</p>
+      <p>Upload a dataset or enter values manually, then visualize regressions and linearized fits.</p>
     </section>
 
     <section class="content">
       <aside class="card panel">
         <h2>Run Regression</h2>
-        <p class="form-hint">Supports CSV and Excel files. Use your exact column names for X and Y.</p>
-        <p style="font-weight: bold;">X and Y columns must have EXACT NAMES as in the uploaded file.</p>
+        <p class="form-hint">Supports CSV and Excel files. You can also open the table below and enter data manually.</p>
+        <p style="font-weight: bold;">X and Y columns must match the table headers exactly.</p>
         <form id="uploadForm">
           <div class="field">
             <label for="fileInput">Data File</label>
-            <input type="file" name="file" id="fileInput" required>
+            <input type="file" name="file" id="fileInput">
           </div>
 
           <div class="field">
@@ -60,6 +60,34 @@
 
           <button type="submit">Run Regression</button>
         </form>
+
+        <div class="panel-divider"></div>
+
+        <h3 class="panel-subtitle">Linearization</h3>
+        <p class="form-hint">Generate a straight-line view of transformed data and compare fits with <code>R^2</code>.</p>
+
+        <div class="field">
+          <label for="linearizationMode">Linearization Mode</label>
+          <select id="linearizationMode" name="linearization_mode">
+            <option value="manual">Manual</option>
+            <option value="automatic">Automatic</option>
+          </select>
+        </div>
+
+        <div class="field" id="manualLinearizationField">
+          <label for="manualLinearizationSelect">Manual Transform</label>
+          <select id="manualLinearizationSelect" name="linearization_transform">
+            <option value="y_vs_x">y vs x</option>
+            <option value="y_vs_x2">y vs x^2</option>
+            <option value="y_vs_x3">y vs x^3</option>
+            <option value="y_vs_1_over_x">y vs 1/x</option>
+            <option value="y_vs_1_over_x2">y vs 1/x^2</option>
+            <option value="ln_y_vs_x">ln(y) vs x</option>
+            <option value="ln_y_vs_ln_x">ln(y) vs ln(x)</option>
+          </select>
+        </div>
+
+        <button id="linearizeBtn" class="secondary-button" type="button">Generate Linearized Graph</button>
       </aside>
 
        <section class="card plot-shell">
@@ -80,10 +108,21 @@
              Show Table
            </button>
          </div>
-         <p class="table-hint">Upload a file to preview and directly edit values before running regression.</p>
+         <p class="table-hint">Upload a file to preview/edit it, or click <strong>Show Table</strong> to create a blank sheet and enter values manually.</p>
          <div id="tableContainer">
            <div id="spreadsheet"></div>
          </div>
+       </section>
+
+       <section class="card plot-shell" id="linearizedSection">
+         <div class="plot-header">
+           <h2>Linearized Graph</h2>
+         </div>
+         <div class="equation-wrap">
+           <div id="linearEquation">line: not generated yet</div>
+           <div id="linearStats" class="metric-line">Choose a mode, then generate a linearized graph.</div>
+         </div>
+         <div id="linearPlot"></div>
        </section>
     </section>
   </main>
@@ -96,10 +135,19 @@
     const modelTypeEl = document.getElementById("modelType");
     const degreeLabelEl = document.getElementById("degreeLabel");
     const degreeInputEl = document.getElementById("degreeInput");
+    const linearizationModeEl = document.getElementById("linearizationMode");
+    const manualLinearizationFieldEl = document.getElementById("manualLinearizationField");
+    const manualLinearizationSelectEl = document.getElementById("manualLinearizationSelect");
+    const linearizeBtnEl = document.getElementById("linearizeBtn");
     const dataTableSectionEl = document.getElementById("dataTableSection");
     const toggleTableBtnEl = document.getElementById("toggleTableBtn");
     const tableContainerEl = document.getElementById("tableContainer");
     const spreadsheetEl = document.getElementById("spreadsheet");
+    const linearizedSectionEl = document.getElementById("linearizedSection");
+    const linearEquationEl = document.getElementById("linearEquation");
+    const linearStatsEl = document.getElementById("linearStats");
+    const linearPlotEl = document.getElementById("linearPlot");
+    const linearizationHintCodeEl = document.querySelector(".panel .form-hint code");
 
     let hotInstance = null;
     let isTableExpanded = false;
@@ -109,6 +157,34 @@
       const needsDegree = modelType !== "exponential";
       degreeLabelEl.style.display = needsDegree ? "block" : "none";
       degreeInputEl.disabled = !needsDegree;
+    }
+
+    function syncLinearizationVisibility() {
+      const isManual = linearizationModeEl.value === "manual";
+      manualLinearizationFieldEl.style.display = isManual ? "block" : "none";
+      manualLinearizationSelectEl.disabled = !isManual;
+    }
+
+    function normalizeLinearizationLabels() {
+      const optionLabels = {
+        y_vs_x: "y vs x",
+        y_vs_x2: "y vs x^2",
+        y_vs_x3: "y vs x^3",
+        y_vs_1_over_x: "y vs 1/x",
+        y_vs_1_over_x2: "y vs 1/x^2",
+        ln_y_vs_x: "ln(y) vs x",
+        ln_y_vs_ln_x: "ln(y) vs ln(x)"
+      };
+
+      if (linearizationHintCodeEl) {
+        linearizationHintCodeEl.textContent = "R^2";
+      }
+
+      Array.from(manualLinearizationSelectEl.options).forEach(option => {
+        if (optionLabels[option.value]) {
+          option.textContent = optionLabels[option.value];
+        }
+      });
     }
 
     function setTableExpanded(expanded) {
@@ -127,7 +203,6 @@
 
     function resetTableView() {
       destroyTable();
-      dataTableSectionEl.style.display = "none";
       setTableExpanded(false);
     }
 
@@ -189,8 +264,47 @@
       return { headers, bodyRows };
     }
 
-    function renderEditableTable(sheetRows) {
-      const { headers, bodyRows } = normalizeRows(sheetRows);
+    function createBlankRows(columnCount, rowCount = 8) {
+      return Array.from({ length: rowCount }, () => Array(columnCount).fill(""));
+    }
+
+    function promptForColumnName(message, fallbackValue) {
+      while (true) {
+        const response = window.prompt(message, fallbackValue);
+        if (response === null) {
+          return null;
+        }
+
+        const trimmed = response.trim();
+        if (trimmed) {
+          return trimmed;
+        }
+
+        alert("Please enter a column name.");
+      }
+    }
+
+    function promptForManualHeaders() {
+      const defaultX = xColInputEl.value.trim() || "x";
+      const defaultY = yColInputEl.value.trim() || "y";
+      const xHeader = promptForColumnName("Enter the name for the first column:", defaultX);
+      if (!xHeader) return null;
+
+      while (true) {
+        const yHeader = promptForColumnName("Enter the name for the second column:", defaultY);
+        if (!yHeader) return null;
+        if (yHeader === xHeader) {
+          alert("Please use different names for the two columns.");
+          continue;
+        }
+        return [xHeader, yHeader];
+      }
+    }
+
+    function renderEditableTable(sheetRows, { expand = false } = {}) {
+      const { headers, bodyRows } = Array.isArray(sheetRows)
+        ? normalizeRows(sheetRows)
+        : sheetRows;
       destroyTable();
 
       hotInstance = new Handsontable(spreadsheetEl, {
@@ -205,8 +319,7 @@
         licenseKey: "non-commercial-and-evaluation"
       });
 
-      dataTableSectionEl.style.display = "block";
-      setTableExpanded(false);
+      setTableExpanded(expand);
 
       if (!xColInputEl.value || xColInputEl.value === "time") {
         xColInputEl.value = headers[0] || xColInputEl.value;
@@ -214,6 +327,19 @@
       if ((!yColInputEl.value || yColInputEl.value === "score") && headers.length > 1) {
         yColInputEl.value = headers[1];
       }
+    }
+
+    function createManualTable() {
+      const headers = promptForManualHeaders();
+      if (!headers) return false;
+
+      xColInputEl.value = headers[0];
+      yColInputEl.value = headers[1];
+      renderEditableTable({
+        headers,
+        bodyRows: createBlankRows(headers.length)
+      }, { expand: true });
+      return true;
     }
 
     async function parseSpreadsheet(file) {
@@ -241,98 +367,60 @@
       });
     }
 
-    syncDegreeVisibility();
-    modelTypeEl.addEventListener("change", syncDegreeVisibility);
-
-    resetTableView();
-
-    toggleTableBtnEl.addEventListener("click", () => {
-      if (!hotInstance) return;
-      setTableExpanded(!isTableExpanded);
-    });
-
-    fileInputEl.addEventListener("change", async () => {
-      const file = fileInputEl.files?.[0];
-      if (!file) {
-        resetTableView();
-        return;
-      }
-
-      try {
-        const rows = await parseSpreadsheet(file);
-        renderEditableTable(rows);
-      } catch (err) {
-        console.error(err);
-        resetTableView();
-        alert(`Could not preview this file as a table: ${err.message}`);
-      }
-    });
-
-    uploadFormEl.addEventListener("submit", async function(e) {
-      e.preventDefault();
-
+    function buildDataFileFromCurrentState() {
       const selectedFile = fileInputEl.files?.[0];
-      if (!selectedFile) {
-        alert("Please upload a file first.");
-        return;
+      if (hotInstance) {
+        return buildEditedCsvFile(selectedFile);
+      }
+      return selectedFile || null;
+    }
+
+    function validateDataReady() {
+      if (!xColInputEl.value.trim() || !yColInputEl.value.trim()) {
+        alert("Enter both column names before generating a graph.");
+        return false;
       }
 
+      if (!fileInputEl.files?.[0] && !hotInstance) {
+        alert("Upload a file or click Show Table to enter data manually.");
+        return false;
+      }
+
+      if (hotInstance && getTrimmedTableBody().length === 0) {
+        alert("Enter at least one row of data in the table before generating a graph.");
+        return false;
+      }
+
+      return true;
+    }
+
+    function buildRequestFormData(extraFields = {}) {
       const formData = new FormData(uploadFormEl);
-      const outgoingFile = hotInstance ? buildEditedCsvFile(selectedFile) : selectedFile;
-      formData.set("file", outgoingFile);
-
-      const response = await fetch("/regression", {
-        method: "POST",
-        body: formData
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.error || "Regression failed");
-        return;
+      const outgoingFile = buildDataFileFromCurrentState();
+      if (!outgoingFile) {
+        throw new Error("No dataset is available.");
       }
 
-      const xCol = formData.get("x_col");
-      const yCol = formData.get("y_col");
-      const modelType = data.model_type || formData.get("model_type") || "polynomial";
-      const degree = data.degree;
-      const curveName = modelType === "polynomial"
-        ? `Degree ${degree} fit`
-        : modelType === "inverse"
-          ? `Inverse n=${degree} fit`
-          : "Exponential fit";
-
-      Plotly.newPlot("plot", [
-        {
-          x: data.x_data,
-          y: data.y_data,
-          mode: "markers",
-          name: "Data",
-          marker: { color: "blue", size: 6 }
-        },
-        {
-          x: data.x_curve,
-          y: data.y_curve,
-          mode: "lines",
-          name: curveName,
-          line: { color: "red" }
-        }
-      ], {
-        title: `Regression of ${yCol} vs ${xCol}`,
-        xaxis: { title: xCol },
-        yaxis: { title: yCol },
-        template: "plotly_white"
+      formData.set("file", outgoingFile);
+      Object.entries(extraFields).forEach(([key, value]) => {
+        formData.set(key, value);
       });
+      return formData;
+    }
 
+    function formatNumber(value, digits = 3) {
+      return Number(value ?? 0).toFixed(digits);
+    }
+
+    function renderRegressionEquation(data, modelType) {
       const DISPLAY_DIGITS = 3;
       const absCoeffOneEps = 1e-12;
 
       function formatSignedTerms(terms) {
         if (terms.length === 0) return "0";
-        return terms.map((t, idx) => {
-          if (idx === 0) return t.sign < 0 ? `-${t.body}` : t.body;
-          return t.sign < 0 ? ` - ${t.body}` : ` + ${t.body}`;
+        return terms.map((term, index) => {
+          if (index === 0) return term.sign < 0 ? `-${term.body}` : term.body;
+          return term.sign < 0 ? ` - ${term.body}` : ` + ${term.body}`;
         }).join("");
       }
 
@@ -394,20 +482,175 @@
         return `y = ${aStr}e^{${exponent}}`;
       }
 
-      let equationStr = "y = 0";
       if (modelType === "inverse") {
-        equationStr = inverseEquation(data.coefficients || []);
-      } else if (modelType === "exponential") {
-        equationStr = exponentialEquation(data.exp_params || {});
-      } else {
-        equationStr = polynomialEquation(data.coefficients || []);
+        return inverseEquation(data.coefficients || []);
       }
+      if (modelType === "exponential") {
+        return exponentialEquation(data.exp_params || {});
+      }
+      return polynomialEquation(data.coefficients || []);
+    }
 
-      const mathJaxElement = `$$${equationStr}$$`;
-      document.getElementById("equation").innerHTML = "equation: " + mathJaxElement;
+    function renderRegressionGraph(data, formData) {
+      const xCol = formData.get("x_col");
+      const yCol = formData.get("y_col");
+      const modelType = data.model_type || formData.get("model_type") || "polynomial";
+      const degree = data.degree;
+      const curveName = modelType === "polynomial"
+        ? `Degree ${degree} fit`
+        : modelType === "inverse"
+          ? `Inverse n=${degree} fit`
+          : "Exponential fit";
+
+      Plotly.newPlot("plot", [
+        {
+          x: data.x_data,
+          y: data.y_data,
+          mode: "markers",
+          name: "Data",
+          marker: { color: "blue", size: 6 }
+        },
+        {
+          x: data.x_curve,
+          y: data.y_curve,
+          mode: "lines",
+          name: curveName,
+          line: { color: "red" }
+        }
+      ], {
+        title: `Regression of ${yCol} vs ${xCol}`,
+        xaxis: { title: xCol },
+        yaxis: { title: yCol },
+        template: "plotly_white"
+      });
+
+      const equationStr = renderRegressionEquation(data, modelType);
+      document.getElementById("equation").innerHTML = `equation: $$${equationStr}$$`;
 
       if (window.MathJax) {
         MathJax.typesetPromise();
+      }
+    }
+
+    function renderLinearizedGraph(data) {
+      linearizedSectionEl.style.display = "block";
+
+      Plotly.newPlot(linearPlotEl, [
+        {
+          x: data.x_data,
+          y: data.y_data,
+          mode: "markers",
+          name: "Transformed data",
+          marker: { color: "#0f766e", size: 6 }
+        },
+        {
+          x: data.x_curve,
+          y: data.y_curve,
+          mode: "lines",
+          name: "Linear fit",
+          line: { color: "#0e7490", width: 3 }
+        }
+      ], {
+        title: `${data.transform_label} Linearization`,
+        xaxis: { title: data.x_axis_label },
+        yaxis: { title: data.y_axis_label },
+        template: "plotly_white"
+      });
+
+      linearEquationEl.textContent = `Line: ${data.equation_text}`;
+      const linearStatsSummary = [
+        `${data.selection_mode === "automatic" ? "Automatic" : "Manual"} selection`,
+        `Transform: ${data.transform_label}`,
+        `R^2 = ${formatNumber(data.r_squared, 4)}`
+      ].join(" | ");
+      linearStatsEl.textContent = linearStatsSummary;
+    }
+
+    normalizeLinearizationLabels();
+    syncDegreeVisibility();
+    syncLinearizationVisibility();
+    modelTypeEl.addEventListener("change", syncDegreeVisibility);
+    linearizationModeEl.addEventListener("change", syncLinearizationVisibility);
+
+    resetTableView();
+    linearizedSectionEl.style.display = "none";
+
+    toggleTableBtnEl.addEventListener("click", () => {
+      if (!hotInstance) {
+        createManualTable();
+        return;
+      }
+      setTableExpanded(!isTableExpanded);
+    });
+
+    fileInputEl.addEventListener("change", async () => {
+      const file = fileInputEl.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      try {
+        const rows = await parseSpreadsheet(file);
+        renderEditableTable(rows);
+      } catch (err) {
+        console.error(err);
+        alert(`Could not preview this file as a table: ${err.message}`);
+      }
+    });
+
+    uploadFormEl.addEventListener("submit", async function(e) {
+      e.preventDefault();
+
+      if (!validateDataReady()) {
+        return;
+      }
+
+      try {
+        const formData = buildRequestFormData();
+        const response = await fetch("/regression", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          alert(data.error || "Regression failed");
+          return;
+        }
+
+        renderRegressionGraph(data, formData);
+      } catch (err) {
+        console.error(err);
+        alert(err.message || "Regression failed");
+      }
+    });
+
+    linearizeBtnEl.addEventListener("click", async () => {
+      if (!validateDataReady()) {
+        return;
+      }
+
+      try {
+        const formData = buildRequestFormData({
+          linearization_mode: linearizationModeEl.value,
+          linearization_transform: manualLinearizationSelectEl.value
+        });
+
+        const response = await fetch("/linearize", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          alert(data.error || "Linearization failed");
+          return;
+        }
+
+        renderLinearizedGraph(data);
+      } catch (err) {
+        console.error(err);
+        alert(err.message || "Linearization failed");
       }
     });
   </script>

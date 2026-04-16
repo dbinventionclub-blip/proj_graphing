@@ -35,6 +35,155 @@ def load_df(file):
     raise ValueError("Unsupported file type. Upload .csv or .xlsx/.xls")
 
 
+def require_uploaded_dataframe():
+    if "file" not in request.files:
+        raise ValueError("No file uploaded")
+
+    file = request.files["file"]
+    if not file or not file.filename:
+        raise ValueError("No file uploaded")
+    return load_df(file)
+
+
+def extract_numeric_xy(df, x_col, y_col):
+    missing_columns = [col for col in (x_col, y_col) if col not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Column not found: {', '.join(missing_columns)}")
+
+    sub = df[[x_col, y_col]].dropna().copy()
+    x = pd.to_numeric(sub[x_col], errors="coerce")
+    y = pd.to_numeric(sub[y_col], errors="coerce")
+    mask = x.notna() & y.notna()
+    x = x[mask].to_numpy(dtype=float)
+    y = y[mask].to_numpy(dtype=float)
+
+    if x.size == 0:
+        raise ValueError("No numeric rows were found for the selected columns")
+
+    return x, y
+
+
+def transform_identity(x, y):
+    return x, y
+
+
+def transform_x_power(x, y, power):
+    return np.power(x, power), y
+
+
+def transform_inverse_x(x, y, power):
+    if np.any(np.isclose(x, 0.0)):
+        raise ValueError("This transform requires x != 0 for every point")
+    return np.power(x, -power), y
+
+
+def transform_log_y(x, y):
+    if np.any(y <= 0):
+        raise ValueError("This transform requires y > 0 for every point")
+    return x, np.log(y)
+
+
+def transform_log_log(x, y):
+    if np.any(x <= 0):
+        raise ValueError("This transform requires x > 0 for every point")
+    if np.any(y <= 0):
+        raise ValueError("This transform requires y > 0 for every point")
+    return np.log(x), np.log(y)
+
+
+LINEARIZATION_TRANSFORMS = {
+    "y_vs_x": {
+        "label": "y vs x",
+        "x_axis_label": lambda x_col, y_col: x_col,
+        "y_axis_label": lambda x_col, y_col: y_col,
+        "transform": transform_identity,
+    },
+    "y_vs_x2": {
+        "label": "y vs x^2",
+        "x_axis_label": lambda x_col, y_col: f"{x_col}^2",
+        "y_axis_label": lambda x_col, y_col: y_col,
+        "transform": lambda x, y: transform_x_power(x, y, 2),
+    },
+    "y_vs_x3": {
+        "label": "y vs x^3",
+        "x_axis_label": lambda x_col, y_col: f"{x_col}^3",
+        "y_axis_label": lambda x_col, y_col: y_col,
+        "transform": lambda x, y: transform_x_power(x, y, 3),
+    },
+    "y_vs_1_over_x": {
+        "label": "y vs 1/x",
+        "x_axis_label": lambda x_col, y_col: f"1/{x_col}",
+        "y_axis_label": lambda x_col, y_col: y_col,
+        "transform": lambda x, y: transform_inverse_x(x, y, 1),
+    },
+    "y_vs_1_over_x2": {
+        "label": "y vs 1/x^2",
+        "x_axis_label": lambda x_col, y_col: f"1/({x_col}^2)",
+        "y_axis_label": lambda x_col, y_col: y_col,
+        "transform": lambda x, y: transform_inverse_x(x, y, 2),
+    },
+    "ln_y_vs_x": {
+        "label": "ln(y) vs x",
+        "x_axis_label": lambda x_col, y_col: x_col,
+        "y_axis_label": lambda x_col, y_col: f"ln({y_col})",
+        "transform": transform_log_y,
+    },
+    "ln_y_vs_ln_x": {
+        "label": "ln(y) vs ln(x)",
+        "x_axis_label": lambda x_col, y_col: f"ln({x_col})",
+        "y_axis_label": lambda x_col, y_col: f"ln({y_col})",
+        "transform": transform_log_log,
+    },
+}
+
+
+def format_linear_equation(y_label, x_label, slope, intercept):
+    slope_str = f"{slope:.6g}"
+    intercept_abs_str = f"{abs(intercept):.6g}"
+    if np.isclose(intercept, 0.0):
+        return f"{y_label} = {slope_str} * ({x_label})"
+
+    sign = "+" if intercept >= 0 else "-"
+    return f"{y_label} = {slope_str} * ({x_label}) {sign} {intercept_abs_str}"
+
+
+def build_linearization_response(x, y, x_col, y_col, transform_key, selection_mode):
+    config = LINEARIZATION_TRANSFORMS[transform_key]
+    x_transformed, y_transformed = config["transform"](x, y)
+
+    if x_transformed.size < 2:
+        raise ValueError("At least two valid points are required to linearize the data")
+
+    X_model = x_transformed.reshape(-1, 1)
+    model = LinearRegression()
+    model.fit(X_model, y_transformed)
+
+    r_squared = float(model.score(X_model, y_transformed))
+    x_curve = np.linspace(x_transformed.min(), x_transformed.max(), 600)
+    y_curve = model.predict(x_curve.reshape(-1, 1))
+
+    slope = float(model.coef_[0])
+    intercept = float(model.intercept_)
+    x_axis_label = config["x_axis_label"](x_col, y_col)
+    y_axis_label = config["y_axis_label"](x_col, y_col)
+
+    return {
+        "selection_mode": selection_mode,
+        "transform_key": transform_key,
+        "transform_label": config["label"],
+        "x_axis_label": x_axis_label,
+        "y_axis_label": y_axis_label,
+        "x_data": x_transformed.tolist(),
+        "y_data": y_transformed.tolist(),
+        "x_curve": x_curve.tolist(),
+        "y_curve": y_curve.tolist(),
+        "slope": slope,
+        "intercept": intercept,
+        "r_squared": r_squared,
+        "equation_text": format_linear_equation(y_axis_label, x_axis_label, slope, intercept),
+    }
+
+
 def make_regression_plot(df, x_col, y_col, degree=1):
     df = df[[x_col, y_col]].dropna()
     X = df[x_col].values.flatten()
@@ -116,13 +265,6 @@ def regression():
 def regression():
     print(" Received request at /regression")
 
-    if "file" not in request.files:
-        print(" No file in request.files")
-        return jsonify({"error": "No file uploaded"}), 400
-
-    file = request.files["file"]
-    print(" File received:", file.filename)
-
     x_col = request.form.get("x_col")
     y_col = request.form.get("y_col")
     degree = int(request.form.get("degree", 1))
@@ -136,14 +278,11 @@ def regression():
         return jsonify({"error": "model_type must be polynomial, inverse, or exponential"}), 400
     print(" Params:", x_col, y_col, degree, model_type)
 
-    df=load_df(file)
-
-    sub = df[[x_col, y_col]].dropna().copy()
-    x = pd.to_numeric(sub[x_col], errors="coerce")
-    y = pd.to_numeric(sub[y_col], errors="coerce")
-    mask = x.notna() & y.notna()
-    x = x[mask].to_numpy(dtype=float)
-    y = y[mask].to_numpy(dtype=float)
+    try:
+        df = require_uploaded_dataframe()
+        x, y = extract_numeric_xy(df, x_col, y_col)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
     if model_type == "polynomial":
         if x.size < degree + 1:
@@ -222,6 +361,55 @@ def regression():
         "model_type": model_type,
         "exp_params": {"a": a, "b": b}
     })
+
+
+@app.route("/linearize", methods=["POST"])
+def linearize():
+    x_col = request.form.get("x_col")
+    y_col = request.form.get("y_col")
+    selection_mode = request.form.get("linearization_mode", "manual").strip().lower()
+    transform_key = request.form.get("linearization_transform", "y_vs_x").strip().lower()
+
+    if not x_col or not y_col:
+        return jsonify({"error": "Missing x_col or y_col"}), 400
+    if selection_mode not in {"manual", "automatic"}:
+        return jsonify({"error": "linearization_mode must be manual or automatic"}), 400
+    if transform_key not in LINEARIZATION_TRANSFORMS:
+        return jsonify({"error": "Invalid linearization transform"}), 400
+
+    try:
+        df = require_uploaded_dataframe()
+        x, y = extract_numeric_xy(df, x_col, y_col)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    if x.size < 2:
+        return jsonify({"error": "At least two data points are required to linearize the data"}), 400
+
+    if selection_mode == "manual":
+        try:
+            result = build_linearization_response(x, y, x_col, y_col, transform_key, selection_mode)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify(result)
+
+    best_result = None
+    valid_options = []
+    for candidate_key in LINEARIZATION_TRANSFORMS:
+        try:
+            candidate = build_linearization_response(x, y, x_col, y_col, candidate_key, selection_mode)
+        except ValueError:
+            continue
+
+        valid_options.append(candidate_key)
+        if best_result is None or candidate["r_squared"] > best_result["r_squared"]:
+            best_result = candidate
+
+    if best_result is None:
+        return jsonify({"error": "No valid automatic linearization was found for this dataset"}), 400
+
+    best_result["evaluated_transforms"] = valid_options
+    return jsonify(best_result)
 
 
 if __name__ == "__main__":

@@ -93,6 +93,13 @@ body {
   letter-spacing: 0.2px;
 }
 
+.panel-subtitle {
+  margin: 0 0 6px 0;
+  font-size: 1rem;
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: 0.2px;
+}
+
 .form-hint {
   margin: 6px 0 18px 0;
   color: var(--ink-subtle);
@@ -136,7 +143,8 @@ input:focus, select:focus {
   display: block;
 }
 
-button[type="submit"] {
+button[type="submit"],
+.secondary-button {
   margin-top: 4px;
   width: 100%;
   border: none;
@@ -149,9 +157,20 @@ button[type="submit"] {
   transition: transform 0.15s ease, box-shadow 0.2s ease;
 }
 
-button[type="submit"]:hover {
+button[type="submit"]:hover,
+.secondary-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 26px rgba(14, 116, 144, 0.26);
+}
+
+.secondary-button {
+  background: linear-gradient(120deg, #0f172a 0%, #1d4ed8 100%);
+}
+
+.panel-divider {
+  height: 1px;
+  margin: 22px 0 18px 0;
+  background: linear-gradient(90deg, rgba(203, 213, 225, 0), rgba(203, 213, 225, 1), rgba(203, 213, 225, 0));
 }
 
 .plot-shell {
@@ -182,13 +201,41 @@ button[type="submit"]:hover {
   padding: 10px 12px;
 }
 
+#linearEquation {
+  font-size: 1rem;
+  color: #0f172a;
+  min-height: 48px;
+  background: #f8fbfe;
+  border: 1px dashed #cbd5e1;
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-weight: 600;
+}
+
+.metric-line {
+  margin-top: 10px;
+  color: var(--ink-subtle);
+  font-size: 0.94rem;
+}
+
 #plot {
   width: 100%;
   min-height: 460px;
   padding: 0 4px 4px 4px;
 }
 
+#linearPlot {
+  width: 100%;
+  min-height: 460px;
+  padding: 0 4px 4px 4px;
+}
+
 #dataTableSection {
+  overflow: hidden;
+  grid-column: 1 / -1;
+}
+
+#linearizedSection {
   display: none;
   overflow: hidden;
   grid-column: 1 / -1;
@@ -236,6 +283,10 @@ button[type="submit"]:hover {
   }
 
   #plot {
+    min-height: 400px;
+  }
+
+  #linearPlot {
     min-height: 400px;
   }
 }
