@@ -18,112 +18,171 @@
 </head>
 <body>
   <main class="page">
-    <section class="hero">
-      <h1>Regression Graphing Studio</h1>
-      <p>Upload a dataset or enter values manually, then visualize regressions and linearized fits.</p>
+    <section class="hero hero-card card">
+      <div class="hero-copy">
+        <p class="eyebrow">Data Modeling Lab</p>
+        <h1>Turn regression graphing into something that feels engineered, not improvised.</h1>
+        <p>Upload a spreadsheet or open a blank table, tune the fit you want, and jump straight to each result the second it renders.</p>
+        <div class="hero-pills">
+          <span>CSV + Excel ingest</span>
+          <span>Manual two-column entry</span>
+          <span>Regression + linearization</span>
+        </div>
+      </div>
+      <div class="hero-grid">
+        <article class="hero-stat">
+          <span class="stat-label">Manual Entry</span>
+          <strong>Blank table on demand</strong>
+          <p>No file required. The table builder prompts for both headers before it opens.</p>
+        </article>
+        <article class="hero-stat">
+          <span class="stat-label">Automatic Motion</span>
+          <strong>Results pull you in</strong>
+          <p>Each generate action scrolls to the graph that was just created and highlights it.</p>
+        </article>
+        <article class="hero-stat">
+          <span class="stat-label">Linearization</span>
+          <strong>Manual or automatic</strong>
+          <p>Choose the transform yourself or let the app keep the strongest straight-line fit.</p>
+        </article>
+      </div>
     </section>
 
-    <section class="content">
-      <aside class="card panel">
-        <h2>Run Regression</h2>
-        <p class="form-hint">Supports CSV and Excel files. You can also open the table below and enter data manually.</p>
-        <p style="font-weight: bold;">X and Y columns must match the table headers exactly.</p>
-        <form id="uploadForm">
-          <div class="field">
-            <label for="fileInput">Data File</label>
-            <input type="file" name="file" id="fileInput">
+    <section class="workspace">
+      <aside class="control-rail">
+        <section class="card panel panel-primary">
+          <p class="section-kicker">Regression Setup</p>
+          <h2>Shape the dataset</h2>
+          <p class="form-hint">Supports CSV and Excel files. You can also open the table below and enter values manually.</p>
+          <div class="notice-strip">
+            <span class="notice-dot"></span>
+            <p>X and Y column names must match the table headers exactly.</p>
           </div>
 
-          <div class="field">
-            <label for="xColInput">X Column</label>
-            <input id="xColInput" type="text" name="x_col" value="time">
-          </div>
+          <form id="uploadForm">
+            <div class="field">
+              <label for="fileInput">Data File</label>
+              <input type="file" name="file" id="fileInput">
+            </div>
+
+            <div class="field-group">
+              <div class="field">
+                <label for="xColInput">X Column</label>
+                <input id="xColInput" type="text" name="x_col" value="time">
+              </div>
+
+              <div class="field">
+                <label for="yColInput">Y Column</label>
+                <input id="yColInput" type="text" name="y_col" value="score">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="modelType">Model</label>
+              <select name="model_type" id="modelType">
+                <option value="polynomial">Polynomial</option>
+                <option value="inverse">Inverse Proportional (x^-n)</option>
+                <option value="exponential">Exponential (base e)</option>
+              </select>
+            </div>
+
+            <div class="field" id="degreeLabel">
+              <label for="degreeInput">Degree / n</label>
+              <input type="number" name="degree" id="degreeInput" value="1" min="1">
+            </div>
+
+            <button type="submit">Generate Regression Graph</button>
+          </form>
+
+          <div class="panel-divider"></div>
+
+          <p class="section-kicker">Linearization Studio</p>
+          <h3 class="panel-subtitle">Straight-line viewfinder</h3>
+          <p class="form-hint">Generate a straight-line view of transformed data and compare fits with <code>R^2</code>.</p>
 
           <div class="field">
-            <label for="yColInput">Y Column</label>
-            <input id="yColInput" type="text" name="y_col" value="score">
-          </div>
-
-          <div class="field">
-            <label for="modelType">Model</label>
-            <select name="model_type" id="modelType">
-              <option value="polynomial">Polynomial</option>
-              <option value="inverse">Inverse Proportional (x^-n)</option>
-              <option value="exponential">Exponential (base e)</option>
+            <label for="linearizationMode">Linearization Mode</label>
+            <select id="linearizationMode" name="linearization_mode">
+              <option value="manual">Manual</option>
+              <option value="automatic">Automatic</option>
             </select>
           </div>
 
-          <div class="field" id="degreeLabel">
-            <label for="degreeInput">Degree / n</label>
-            <input type="number" name="degree" id="degreeInput" value="1" min="1">
+          <div class="field" id="manualLinearizationField">
+            <label for="manualLinearizationSelect">Manual Transform</label>
+            <select id="manualLinearizationSelect" name="linearization_transform">
+              <option value="y_vs_x">y vs x</option>
+              <option value="y_vs_x2">y vs x^2</option>
+              <option value="y_vs_x3">y vs x^3</option>
+              <option value="y_vs_1_over_x">y vs 1/x</option>
+              <option value="y_vs_1_over_x2">y vs 1/x^2</option>
+              <option value="ln_y_vs_x">ln(y) vs x</option>
+              <option value="ln_y_vs_ln_x">ln(y) vs ln(x)</option>
+            </select>
           </div>
 
-          <button type="submit">Run Regression</button>
-        </form>
+          <button id="linearizeBtn" class="secondary-button" type="button">Generate Linearized Graph</button>
+        </section>
 
-        <div class="panel-divider"></div>
-
-        <h3 class="panel-subtitle">Linearization</h3>
-        <p class="form-hint">Generate a straight-line view of transformed data and compare fits with <code>R^2</code>.</p>
-
-        <div class="field">
-          <label for="linearizationMode">Linearization Mode</label>
-          <select id="linearizationMode" name="linearization_mode">
-            <option value="manual">Manual</option>
-            <option value="automatic">Automatic</option>
-          </select>
-        </div>
-
-        <div class="field" id="manualLinearizationField">
-          <label for="manualLinearizationSelect">Manual Transform</label>
-          <select id="manualLinearizationSelect" name="linearization_transform">
-            <option value="y_vs_x">y vs x</option>
-            <option value="y_vs_x2">y vs x^2</option>
-            <option value="y_vs_x3">y vs x^3</option>
-            <option value="y_vs_1_over_x">y vs 1/x</option>
-            <option value="y_vs_1_over_x2">y vs 1/x^2</option>
-            <option value="ln_y_vs_x">ln(y) vs x</option>
-            <option value="ln_y_vs_ln_x">ln(y) vs ln(x)</option>
-          </select>
-        </div>
-
-        <button id="linearizeBtn" class="secondary-button" type="button">Generate Linearized Graph</button>
+        <section class="card helper-card">
+          <p class="section-kicker">Studio Notes</p>
+          <h3>Fast workflow</h3>
+          <ul class="helper-list">
+            <li>Use <strong>Show Table</strong> without an upload to create a blank sheet and enter values manually.</li>
+            <li>Regression and linearization both use the edited spreadsheet currently shown on the page.</li>
+            <li>Automatic linearization tests the valid transforms and keeps the one with the strongest <code>R^2</code>.</li>
+          </ul>
+        </section>
       </aside>
 
-       <section class="card plot-shell">
-         <div class="plot-header">
-           <h2>Graph Output</h2>
-         </div>
-         <div class="equation-wrap">
-           <div id="equation">modeled as:</div>
-         </div>
-         <div id="plot"></div>
-       </section>
-       
-       <!-- Data Table Section -->
-       <section class="card" id="dataTableSection">
-         <div class="plot-header">
-           <h2>Data Table</h2>
-           <button id="toggleTableBtn" class="table-toggle" type="button" aria-expanded="false">
-             Show Table
-           </button>
-         </div>
-         <p class="table-hint">Upload a file to preview/edit it, or click <strong>Show Table</strong> to create a blank sheet and enter values manually.</p>
-         <div id="tableContainer">
-           <div id="spreadsheet"></div>
-         </div>
-       </section>
+      <section class="stage">
+        <section class="card plot-shell stage-card" id="regressionSection">
+          <div class="plot-header">
+            <div class="heading-stack">
+              <p class="section-kicker">Primary Output</p>
+              <h2>Regression Graph</h2>
+            </div>
+            <span class="status-badge">Curve + equation</span>
+          </div>
+          <div class="equation-wrap">
+            <div class="equation-label">Best-fit equation</div>
+            <div id="equation">Run a regression to populate the fitted equation.</div>
+          </div>
+          <div id="plot"></div>
+        </section>
 
-       <section class="card plot-shell" id="linearizedSection">
-         <div class="plot-header">
-           <h2>Linearized Graph</h2>
-         </div>
-         <div class="equation-wrap">
-           <div id="linearEquation">line: not generated yet</div>
-           <div id="linearStats" class="metric-line">Choose a mode, then generate a linearized graph.</div>
-         </div>
-         <div id="linearPlot"></div>
-       </section>
+        <section class="card data-card" id="dataTableSection">
+          <div class="plot-header">
+            <div class="heading-stack">
+              <p class="section-kicker">Editable Dataset</p>
+              <h2>Data Table</h2>
+            </div>
+            <button id="toggleTableBtn" class="table-toggle" type="button" aria-expanded="false">
+              Show Table
+            </button>
+          </div>
+          <p class="table-hint">Upload a file to preview and edit it, or click <strong>Show Table</strong> to create a blank table and enter values by hand.</p>
+          <div id="tableContainer">
+            <div id="spreadsheet"></div>
+          </div>
+        </section>
+
+        <section class="card plot-shell stage-card" id="linearizedSection">
+          <div class="plot-header">
+            <div class="heading-stack">
+              <p class="section-kicker">Secondary Output</p>
+              <h2>Linearized Graph</h2>
+            </div>
+            <span class="status-badge">Transform + R^2</span>
+          </div>
+          <div class="equation-wrap">
+            <div class="equation-label">Linearized equation</div>
+            <div id="linearEquation">Generate a linearized graph to inspect the transformed line.</div>
+            <div id="linearStats" class="metric-line">Choose a mode, then generate a linearized graph.</div>
+          </div>
+          <div id="linearPlot"></div>
+        </section>
+      </section>
     </section>
   </main>
 
@@ -139,6 +198,7 @@
     const manualLinearizationFieldEl = document.getElementById("manualLinearizationField");
     const manualLinearizationSelectEl = document.getElementById("manualLinearizationSelect");
     const linearizeBtnEl = document.getElementById("linearizeBtn");
+    const regressionSectionEl = document.getElementById("regressionSection");
     const dataTableSectionEl = document.getElementById("dataTableSection");
     const toggleTableBtnEl = document.getElementById("toggleTableBtn");
     const tableContainerEl = document.getElementById("tableContainer");
@@ -151,6 +211,7 @@
 
     let hotInstance = null;
     let isTableExpanded = false;
+    let stageFocusTimer = null;
 
     function syncDegreeVisibility() {
       const modelType = modelTypeEl.value;
@@ -412,6 +473,71 @@
       return Number(value ?? 0).toFixed(digits);
     }
 
+    function buildPlotLayout(title, xAxisTitle, yAxisTitle) {
+      return {
+        title: {
+          text: title,
+          x: 0.02,
+          xanchor: "left",
+          font: {
+            family: "Space Grotesk, sans-serif",
+            size: 20,
+            color: "#0f172a"
+          }
+        },
+        template: "plotly_white",
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "#f8fbff",
+        margin: { t: 72, r: 28, b: 60, l: 72 },
+        font: {
+          family: "Outfit, sans-serif",
+          color: "#0f172a"
+        },
+        legend: {
+          orientation: "h",
+          x: 1,
+          xanchor: "right",
+          y: 1.14,
+          bgcolor: "rgba(255,255,255,0.9)",
+          bordercolor: "rgba(148,163,184,0.25)",
+          borderwidth: 1
+        },
+        xaxis: {
+          title: xAxisTitle,
+          gridcolor: "rgba(148,163,184,0.18)",
+          zerolinecolor: "rgba(148,163,184,0.22)",
+          linecolor: "rgba(100,116,139,0.32)"
+        },
+        yaxis: {
+          title: yAxisTitle,
+          gridcolor: "rgba(148,163,184,0.18)",
+          zerolinecolor: "rgba(148,163,184,0.22)",
+          linecolor: "rgba(100,116,139,0.32)"
+        }
+      };
+    }
+
+    function spotlightSection(sectionEl) {
+      document.querySelectorAll(".stage-card").forEach(card => {
+        card.classList.remove("stage-focus");
+      });
+
+      if (!sectionEl) return;
+
+      sectionEl.classList.add("stage-focus");
+      window.clearTimeout(stageFocusTimer);
+      stageFocusTimer = window.setTimeout(() => {
+        sectionEl.classList.remove("stage-focus");
+      }, 1800);
+
+      window.requestAnimationFrame(() => {
+        sectionEl.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      });
+    }
+
     function renderRegressionEquation(data, modelType) {
       const DISPLAY_DIGITS = 3;
       const absCoeffOneEps = 1e-12;
@@ -491,7 +617,7 @@
       return polynomialEquation(data.coefficients || []);
     }
 
-    function renderRegressionGraph(data, formData) {
+    async function renderRegressionGraph(data, formData) {
       const xCol = formData.get("x_col");
       const yCol = formData.get("y_col");
       const modelType = data.model_type || formData.get("model_type") || "polynomial";
@@ -502,59 +628,65 @@
           ? `Inverse n=${degree} fit`
           : "Exponential fit";
 
-      Plotly.newPlot("plot", [
+      await Plotly.newPlot("plot", [
         {
           x: data.x_data,
           y: data.y_data,
           mode: "markers",
           name: "Data",
-          marker: { color: "blue", size: 6 }
+          marker: {
+            color: "#14b8a6",
+            size: 8,
+            line: { color: "#ecfeff", width: 1.5 }
+          }
         },
         {
           x: data.x_curve,
           y: data.y_curve,
           mode: "lines",
           name: curveName,
-          line: { color: "red" }
+          line: { color: "#2563eb", width: 4 }
         }
-      ], {
-        title: `Regression of ${yCol} vs ${xCol}`,
-        xaxis: { title: xCol },
-        yaxis: { title: yCol },
-        template: "plotly_white"
+      ], buildPlotLayout(`Regression of ${yCol} vs ${xCol}`, xCol, yCol), {
+        responsive: true,
+        displaylogo: false
       });
 
       const equationStr = renderRegressionEquation(data, modelType);
       document.getElementById("equation").innerHTML = `equation: $$${equationStr}$$`;
 
       if (window.MathJax) {
-        MathJax.typesetPromise();
+        await MathJax.typesetPromise([document.getElementById("equation")]);
       }
+
+      spotlightSection(regressionSectionEl);
     }
 
-    function renderLinearizedGraph(data) {
+    async function renderLinearizedGraph(data) {
       linearizedSectionEl.style.display = "block";
 
-      Plotly.newPlot(linearPlotEl, [
+      await Plotly.newPlot(linearPlotEl, [
         {
           x: data.x_data,
           y: data.y_data,
           mode: "markers",
           name: "Transformed data",
-          marker: { color: "#0f766e", size: 6 }
+          marker: {
+            color: "#f97316",
+            size: 8,
+            line: { color: "#fff7ed", width: 1.5 }
+          }
         },
         {
           x: data.x_curve,
           y: data.y_curve,
           mode: "lines",
           name: "Linear fit",
-          line: { color: "#0e7490", width: 3 }
+          line: { color: "#7c3aed", width: 4 }
         }
-      ], {
-        title: `${data.transform_label} Linearization`,
-        xaxis: { title: data.x_axis_label },
-        yaxis: { title: data.y_axis_label },
-        template: "plotly_white"
+      ], buildPlotLayout(`${data.transform_label} Linearization`, data.x_axis_label, data.y_axis_label), {
+        responsive: true,
+        displaylogo: false
       });
 
       linearEquationEl.textContent = `Line: ${data.equation_text}`;
@@ -564,6 +696,8 @@
         `R^2 = ${formatNumber(data.r_squared, 4)}`
       ].join(" | ");
       linearStatsEl.textContent = linearStatsSummary;
+
+      spotlightSection(linearizedSectionEl);
     }
 
     normalizeLinearizationLabels();
@@ -618,7 +752,7 @@
           return;
         }
 
-        renderRegressionGraph(data, formData);
+        await renderRegressionGraph(data, formData);
       } catch (err) {
         console.error(err);
         alert(err.message || "Regression failed");
@@ -647,7 +781,7 @@
           return;
         }
 
-        renderLinearizedGraph(data);
+        await renderLinearizedGraph(data);
       } catch (err) {
         console.error(err);
         alert(err.message || "Linearization failed");
