@@ -9,8 +9,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+    <!-- Handsontable for interactive spreadsheet -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@14.4/dist/handsontable.full.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/handsontable@14.4/dist/handsontable.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <main class="page">
@@ -58,22 +62,47 @@
         </form>
       </aside>
 
-      <section class="card plot-shell">
-        <div class="plot-header">
-          <h2>Graph Output</h2>
-        </div>
-        <div class="equation-wrap">
-          <div id="equation">modeled as:</div>
-        </div>
-        <div id="plot"></div>
-      </section>
+       <section class="card plot-shell">
+         <div class="plot-header">
+           <h2>Graph Output</h2>
+         </div>
+         <div class="equation-wrap">
+           <div id="equation">modeled as:</div>
+         </div>
+         <div id="plot"></div>
+       </section>
+       
+       <!-- Data Table Section -->
+       <section class="card" id="dataTableSection">
+         <div class="plot-header">
+           <h2>Data Table</h2>
+           <button id="toggleTableBtn" class="table-toggle" type="button" aria-expanded="false">
+             Show Table
+           </button>
+         </div>
+         <p class="table-hint">Upload a file to preview and directly edit values before running regression.</p>
+         <div id="tableContainer">
+           <div id="spreadsheet"></div>
+         </div>
+       </section>
     </section>
   </main>
 
   <script>
+    const uploadFormEl = document.getElementById("uploadForm");
+    const fileInputEl = document.getElementById("fileInput");
+    const xColInputEl = document.getElementById("xColInput");
+    const yColInputEl = document.getElementById("yColInput");
     const modelTypeEl = document.getElementById("modelType");
     const degreeLabelEl = document.getElementById("degreeLabel");
     const degreeInputEl = document.getElementById("degreeInput");
+    const dataTableSectionEl = document.getElementById("dataTableSection");
+    const toggleTableBtnEl = document.getElementById("toggleTableBtn");
+    const tableContainerEl = document.getElementById("tableContainer");
+    const spreadsheetEl = document.getElementById("spreadsheet");
+
+    let hotInstance = null;
+    let isTableExpanded = false;
 
     function syncDegreeVisibility() {
       const modelType = modelTypeEl.value;
@@ -82,14 +111,175 @@
       degreeInputEl.disabled = !needsDegree;
     }
 
+    function setTableExpanded(expanded) {
+      isTableExpanded = expanded;
+      tableContainerEl.style.display = expanded ? "block" : "none";
+      toggleTableBtnEl.textContent = expanded ? "Hide Table" : "Show Table";
+      toggleTableBtnEl.setAttribute("aria-expanded", String(expanded));
+    }
+
+    function destroyTable() {
+      if (hotInstance) {
+        hotInstance.destroy();
+        hotInstance = null;
+      }
+    }
+
+    function resetTableView() {
+      destroyTable();
+      dataTableSectionEl.style.display = "none";
+      setTableExpanded(false);
+    }
+
+    function csvEscapeCell(value) {
+      const cell = value == null ? "" : String(value);
+      return /[",\n\r]/.test(cell) ? `"${cell.replace(/"/g, "\"\"")}"` : cell;
+    }
+
+    function toCsvText(rows) {
+      return rows.map(row => row.map(csvEscapeCell).join(",")).join("\n");
+    }
+
+    function getTrimmedTableBody() {
+      if (!hotInstance) return [];
+      const rows = hotInstance.getData();
+      let lastNonEmptyIndex = -1;
+      for (let i = 0; i < rows.length; i++) {
+        const hasData = rows[i].some(cell => String(cell ?? "").trim() !== "");
+        if (hasData) lastNonEmptyIndex = i;
+      }
+      return rows.slice(0, lastNonEmptyIndex + 1);
+    }
+
+    function buildEditedCsvFile(originalFile) {
+      if (!hotInstance) return originalFile;
+      const headers = hotInstance.getColHeader().map(header => String(header ?? "").trim());
+      const body = getTrimmedTableBody();
+      const csv = toCsvText([headers, ...body]);
+      const baseName = (originalFile?.name || "data").replace(/\.[^/.]+$/, "") || "data";
+      return new File([csv], `${baseName}_edited.csv`, { type: "text/csv" });
+    }
+
+    function normalizeRows(sheetRows) {
+      if (!Array.isArray(sheetRows) || sheetRows.length === 0) {
+        return { headers: ["Column 1"], bodyRows: [[""]] };
+      }
+
+      const rawHeader = Array.isArray(sheetRows[0]) ? sheetRows[0] : [];
+      const dataRows = sheetRows.slice(1).map(row => (Array.isArray(row) ? row : []));
+      let colCount = rawHeader.length;
+      for (const row of dataRows) {
+        colCount = Math.max(colCount, row.length);
+      }
+      if (colCount === 0) colCount = 1;
+
+      const headers = Array.from({ length: colCount }, (_, idx) => {
+        const label = String(rawHeader[idx] ?? "").trim();
+        return label || `Column ${idx + 1}`;
+      });
+
+      const bodyRows = dataRows.map(row =>
+        Array.from({ length: colCount }, (_, idx) => row[idx] ?? "")
+      );
+
+      if (bodyRows.length === 0) {
+        bodyRows.push(Array(colCount).fill(""));
+      }
+
+      return { headers, bodyRows };
+    }
+
+    function renderEditableTable(sheetRows) {
+      const { headers, bodyRows } = normalizeRows(sheetRows);
+      destroyTable();
+
+      hotInstance = new Handsontable(spreadsheetEl, {
+        data: bodyRows,
+        colHeaders: headers,
+        rowHeaders: true,
+        stretchH: "all",
+        height: 340,
+        manualColumnResize: true,
+        contextMenu: true,
+        minSpareRows: 1,
+        licenseKey: "non-commercial-and-evaluation"
+      });
+
+      dataTableSectionEl.style.display = "block";
+      setTableExpanded(false);
+
+      if (!xColInputEl.value || xColInputEl.value === "time") {
+        xColInputEl.value = headers[0] || xColInputEl.value;
+      }
+      if ((!yColInputEl.value || yColInputEl.value === "score") && headers.length > 1) {
+        yColInputEl.value = headers[1];
+      }
+    }
+
+    async function parseSpreadsheet(file) {
+      if (!file) {
+        throw new Error("No file selected.");
+      }
+
+      let workbook;
+      const lowerName = file.name.toLowerCase();
+      if (lowerName.endsWith(".csv")) {
+        workbook = XLSX.read(await file.text(), { type: "string" });
+      } else {
+        workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      }
+
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        throw new Error("No worksheet found in the uploaded file.");
+      }
+
+      return XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], {
+        header: 1,
+        raw: false,
+        defval: ""
+      });
+    }
+
     syncDegreeVisibility();
     modelTypeEl.addEventListener("change", syncDegreeVisibility);
 
-    document.getElementById("uploadForm").addEventListener("submit", async function(e) {
+    resetTableView();
+
+    toggleTableBtnEl.addEventListener("click", () => {
+      if (!hotInstance) return;
+      setTableExpanded(!isTableExpanded);
+    });
+
+    fileInputEl.addEventListener("change", async () => {
+      const file = fileInputEl.files?.[0];
+      if (!file) {
+        resetTableView();
+        return;
+      }
+
+      try {
+        const rows = await parseSpreadsheet(file);
+        renderEditableTable(rows);
+      } catch (err) {
+        console.error(err);
+        resetTableView();
+        alert(`Could not preview this file as a table: ${err.message}`);
+      }
+    });
+
+    uploadFormEl.addEventListener("submit", async function(e) {
       e.preventDefault();
 
-      const form = document.getElementById("uploadForm");
-      const formData = new FormData(form);
+      const selectedFile = fileInputEl.files?.[0];
+      if (!selectedFile) {
+        alert("Please upload a file first.");
+        return;
+      }
+
+      const formData = new FormData(uploadFormEl);
+      const outgoingFile = hotInstance ? buildEditedCsvFile(selectedFile) : selectedFile;
+      formData.set("file", outgoingFile);
 
       const response = await fetch("/regression", {
         method: "POST",
