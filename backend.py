@@ -13,6 +13,9 @@ import os
 app = Flask(__name__)
 CORS(app)
 
+PLOT_SAMPLE_COUNT = 600
+INTERCEPT_TOL = 1e-9
+
 @app.route("/", methods=["GET"])
 def root():
     return send_from_directory(os.path.dirname(__file__), "index.html")
@@ -61,6 +64,175 @@ def extract_numeric_xy(df, x_col, y_col):
         raise ValueError("No numeric rows were found for the selected columns")
 
     return x, y
+
+
+def clean_number(value, tol=INTERCEPT_TOL):
+    value = float(value)
+    return 0.0 if np.isclose(value, 0.0, atol=tol, rtol=0.0) else value
+
+
+def format_point_value(value):
+    return f"{clean_number(value):.6g}"
+
+
+def unique_sorted(values, tol=1e-7):
+    cleaned = []
+    for value in sorted(float(v) for v in values if np.isfinite(v)):
+        if not cleaned or not np.isclose(value, cleaned[-1], atol=tol, rtol=0.0):
+            cleaned.append(clean_number(value))
+    return cleaned
+
+
+def extract_real_roots(coefficients_desc, tol=1e-7):
+    coeffs = np.asarray(coefficients_desc, dtype=float)
+    if coeffs.size <= 1 or np.all(np.isclose(coeffs, 0.0, atol=tol, rtol=0.0)):
+        return []
+
+    roots = np.roots(coeffs)
+    real_roots = [
+        float(root.real)
+        for root in roots
+        if np.isfinite(root.real) and np.isclose(root.imag, 0.0, atol=tol, rtol=0.0)
+    ]
+    return unique_sorted(real_roots, tol=tol)
+
+
+def make_intercept_points(axis, values):
+    points = []
+    values = unique_sorted(values)
+    total = len(values)
+    prefix = "X-intercept" if axis == "x" else "Y-intercept"
+
+    for index, value in enumerate(values, start=1):
+        x_val = clean_number(value if axis == "x" else 0.0)
+        y_val = clean_number(0.0 if axis == "x" else value)
+        name = f"{prefix} {index}" if total > 1 else prefix
+        points.append({
+            "axis": axis,
+            "name": name,
+            "x": x_val,
+            "y": y_val,
+            "label": f"{name} ({format_point_value(x_val)}, {format_point_value(y_val)})",
+        })
+
+    return points
+
+
+def build_plot_x_bounds(x_values, extra_x_values=None):
+    candidates = [float(v) for v in x_values if np.isfinite(v)]
+    if extra_x_values:
+        candidates.extend(float(v) for v in extra_x_values if np.isfinite(v))
+
+    if not candidates:
+        return -1.0, 1.0
+
+    x_min = min(candidates)
+    x_max = max(candidates)
+    if np.isclose(x_min, x_max, atol=INTERCEPT_TOL, rtol=0.0):
+        padding = max(1.0, abs(x_min) * 0.2, 0.25)
+    else:
+        padding = max((x_max - x_min) * 0.08, 0.1)
+
+    return x_min - padding, x_max + padding
+
+
+def build_linear_curve_points(slope, intercept, x_values, extra_x_values=None, num_points=PLOT_SAMPLE_COUNT):
+    x_min, x_max = build_plot_x_bounds(x_values, extra_x_values)
+    x_curve = np.linspace(x_min, x_max, num_points)
+    y_curve = slope * x_curve + intercept
+    return x_curve.tolist(), y_curve.tolist()
+
+
+def evaluate_inverse_curve(x_values, coeffs):
+    x_values = np.asarray(x_values, dtype=float)
+    y_values = np.zeros_like(x_values, dtype=float)
+    for power, coeff in enumerate(coeffs):
+        if power == 0:
+            y_values += coeff
+        else:
+            y_values += coeff * np.power(x_values, -power)
+    return y_values
+
+
+def build_inverse_curve_points(coeffs, x_values, extra_x_values=None, num_points=PLOT_SAMPLE_COUNT):
+    x_min, x_max = build_plot_x_bounds(x_values, extra_x_values)
+
+    if x_min < 0 < x_max:
+        scale = max(abs(x_min), abs(x_max), 1.0)
+        zero_gap = max(scale * 1e-3, 1e-6)
+        left_count = max(2, num_points // 2)
+        right_count = max(2, num_points - left_count)
+
+        left_x = np.linspace(x_min, -zero_gap, left_count)
+        right_x = np.linspace(zero_gap, x_max, right_count)
+        left_y = evaluate_inverse_curve(left_x, coeffs)
+        right_y = evaluate_inverse_curve(right_x, coeffs)
+
+        return (
+            left_x.tolist() + [None] + right_x.tolist(),
+            left_y.tolist() + [None] + right_y.tolist(),
+        )
+
+    x_curve = np.linspace(x_min, x_max, num_points)
+    x_curve = x_curve[~np.isclose(x_curve, 0.0, atol=INTERCEPT_TOL, rtol=0.0)]
+    y_curve = evaluate_inverse_curve(x_curve, coeffs)
+    return x_curve.tolist(), y_curve.tolist()
+
+
+def build_linear_intercept_payload(slope, intercept):
+    intercept_points = make_intercept_points("y", [intercept])
+    intercept_notes = []
+    extra_x_values = [0.0]
+
+    if np.isclose(slope, 0.0, atol=INTERCEPT_TOL, rtol=0.0):
+        if np.isclose(intercept, 0.0, atol=INTERCEPT_TOL, rtol=0.0):
+            intercept_points.extend(make_intercept_points("x", [0.0]))
+        else:
+            intercept_notes.append("No finite x-intercept for this fitted line.")
+    else:
+        x_intercept = -intercept / slope
+        intercept_points.extend(make_intercept_points("x", [x_intercept]))
+        extra_x_values.append(x_intercept)
+
+    return intercept_points, intercept_notes, extra_x_values
+
+
+def build_polynomial_intercept_payload(coeffs):
+    y_intercept = coeffs[0] if coeffs else 0.0
+    x_intercepts = extract_real_roots(list(reversed(coeffs)))
+    intercept_points = make_intercept_points("y", [y_intercept]) + make_intercept_points("x", x_intercepts)
+    intercept_notes = []
+    if not x_intercepts:
+        intercept_notes.append("No finite x-intercept for this fitted curve.")
+    return intercept_points, intercept_notes, [0.0] + x_intercepts
+
+
+def build_inverse_intercept_payload(coeffs):
+    intercept_points = []
+    intercept_notes = []
+
+    x_intercepts = [
+        root for root in extract_real_roots(coeffs)
+        if not np.isclose(root, 0.0, atol=INTERCEPT_TOL, rtol=0.0)
+    ]
+    intercept_points.extend(make_intercept_points("x", x_intercepts))
+    if not x_intercepts:
+        intercept_notes.append("No finite x-intercept for this inverse fit.")
+
+    if np.all(np.isclose(coeffs[1:], 0.0, atol=INTERCEPT_TOL, rtol=0.0)):
+        intercept_points.extend(make_intercept_points("y", [coeffs[0]]))
+        extra_x_values = [0.0] + x_intercepts
+    else:
+        intercept_notes.append("No finite y-intercept for this inverse fit.")
+        extra_x_values = x_intercepts
+
+    return intercept_points, intercept_notes, extra_x_values
+
+
+def build_exponential_intercept_payload(a_value):
+    intercept_points = make_intercept_points("y", [a_value])
+    intercept_notes = ["No finite x-intercept for this exponential fit."]
+    return intercept_points, intercept_notes, [0.0]
 
 
 def transform_identity(x, y):
@@ -159,13 +331,12 @@ def build_linearization_response(x, y, x_col, y_col, transform_key, selection_mo
     model.fit(X_model, y_transformed)
 
     r_squared = float(model.score(X_model, y_transformed))
-    x_curve = np.linspace(x_transformed.min(), x_transformed.max(), 600)
-    y_curve = model.predict(x_curve.reshape(-1, 1))
-
     slope = float(model.coef_[0])
     intercept = float(model.intercept_)
     x_axis_label = config["x_axis_label"](x_col, y_col)
     y_axis_label = config["y_axis_label"](x_col, y_col)
+    intercept_points, intercept_notes, extra_x_values = build_linear_intercept_payload(slope, intercept)
+    x_curve, y_curve = build_linear_curve_points(slope, intercept, x_transformed, extra_x_values)
 
     return {
         "selection_mode": selection_mode,
@@ -175,12 +346,14 @@ def build_linearization_response(x, y, x_col, y_col, transform_key, selection_mo
         "y_axis_label": y_axis_label,
         "x_data": x_transformed.tolist(),
         "y_data": y_transformed.tolist(),
-        "x_curve": x_curve.tolist(),
-        "y_curve": y_curve.tolist(),
+        "x_curve": x_curve,
+        "y_curve": y_curve,
         "slope": slope,
         "intercept": intercept,
         "r_squared": r_squared,
         "equation_text": format_linear_equation(y_axis_label, x_axis_label, slope, intercept),
+        "intercept_points": intercept_points,
+        "intercept_notes": intercept_notes,
     }
 
 
@@ -295,7 +468,10 @@ def regression():
         model = LinearRegression(fit_intercept=False)
         model.fit(X_poly, y)
 
-        x_curve = np.linspace(x.min(), x.max(), 600).reshape(-1, 1)
+        coefficients = model.coef_.tolist()
+        intercept_points, intercept_notes, extra_x_values = build_polynomial_intercept_payload(coefficients)
+        x_curve_min, x_curve_max = build_plot_x_bounds(x, extra_x_values)
+        x_curve = np.linspace(x_curve_min, x_curve_max, PLOT_SAMPLE_COUNT).reshape(-1, 1)
         x_curve_poly = poly.transform(x_curve)
         y_curve = model.predict(x_curve_poly)
 
@@ -304,9 +480,11 @@ def regression():
             "y_data": y.tolist(),
             "x_curve": x_curve.squeeze().tolist(),
             "y_curve": y_curve.tolist(),
-            "coefficients": model.coef_.tolist(),   # [a0, a1, a2, ...] for 1, x, x^2, ...
+            "coefficients": coefficients,   # [a0, a1, a2, ...] for 1, x, x^2, ...
             "degree": degree,
-            "model_type": model_type
+            "model_type": model_type,
+            "intercept_points": intercept_points,
+            "intercept_notes": intercept_notes,
         })
 
     if model_type == "inverse":
@@ -318,22 +496,20 @@ def regression():
         X_inv = np.column_stack([np.ones_like(x)] + [x ** (-k) for k in range(1, degree + 1)])
         model = LinearRegression(fit_intercept=False)
         model.fit(X_inv, y)
-
-        x_curve = np.linspace(x.min(), x.max(), 600)
-        x_curve = x_curve[~np.isclose(x_curve, 0.0)]
-        X_curve_inv = np.column_stack(
-            [np.ones_like(x_curve)] + [x_curve ** (-k) for k in range(1, degree + 1)]
-        )
-        y_curve = model.predict(X_curve_inv)
+        coefficients = model.coef_.tolist()
+        intercept_points, intercept_notes, extra_x_values = build_inverse_intercept_payload(coefficients)
+        x_curve, y_curve = build_inverse_curve_points(coefficients, x, extra_x_values)
 
         return jsonify({
             "x_data": x.tolist(),
             "y_data": y.tolist(),
-            "x_curve": x_curve.tolist(),
-            "y_curve": y_curve.tolist(),
-            "coefficients": model.coef_.tolist(),   # [a0, a1, ...] for 1, x^-1, x^-2, ...
+            "x_curve": x_curve,
+            "y_curve": y_curve,
+            "coefficients": coefficients,   # [a0, a1, ...] for 1, x^-1, x^-2, ...
             "degree": degree,
-            "model_type": model_type
+            "model_type": model_type,
+            "intercept_points": intercept_points,
+            "intercept_notes": intercept_notes,
         })
 
     # model_type == "exponential"
@@ -349,8 +525,9 @@ def regression():
 
     b = float(model.coef_[0])
     a = float(np.exp(model.intercept_))
-
-    x_curve = np.linspace(x.min(), x.max(), 600)
+    intercept_points, intercept_notes, extra_x_values = build_exponential_intercept_payload(a)
+    x_curve_min, x_curve_max = build_plot_x_bounds(x, extra_x_values)
+    x_curve = np.linspace(x_curve_min, x_curve_max, PLOT_SAMPLE_COUNT)
     y_curve = a * np.exp(b * x_curve)
 
     return jsonify({
@@ -359,7 +536,9 @@ def regression():
         "x_curve": x_curve.tolist(),
         "y_curve": y_curve.tolist(),
         "model_type": model_type,
-        "exp_params": {"a": a, "b": b}
+        "exp_params": {"a": a, "b": b},
+        "intercept_points": intercept_points,
+        "intercept_notes": intercept_notes,
     })
 
 

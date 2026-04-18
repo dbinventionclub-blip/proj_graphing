@@ -632,6 +632,88 @@
       };
     }
 
+    function buildInterceptTraces(interceptPoints = []) {
+      const xPoints = interceptPoints.filter(point => point?.axis === "x");
+      const yPoints = interceptPoints.filter(point => point?.axis === "y");
+      const traces = [];
+
+      if (xPoints.length) {
+        traces.push({
+          x: xPoints.map(point => point.x),
+          y: xPoints.map(point => point.y),
+          mode: "markers+text",
+          name: xPoints.length === 1 ? "X-intercept" : "X-intercepts",
+          text: xPoints.map(point => point.label),
+          textposition: "top center",
+          textfont: {
+            family: "Outfit, sans-serif",
+            size: 12,
+            color: "#9a3412"
+          },
+          marker: {
+            color: "#c2410c",
+            size: 13,
+            symbol: "diamond",
+            line: { color: "#fff7ed", width: 1.5 }
+          },
+          cliponaxis: false,
+          hovertemplate: "%{text}<extra></extra>"
+        });
+      }
+
+      if (yPoints.length) {
+        traces.push({
+          x: yPoints.map(point => point.x),
+          y: yPoints.map(point => point.y),
+          mode: "markers+text",
+          name: yPoints.length === 1 ? "Y-intercept" : "Y-intercepts",
+          text: yPoints.map(point => point.label),
+          textposition: "bottom center",
+          textfont: {
+            family: "Outfit, sans-serif",
+            size: 12,
+            color: "#9f1239"
+          },
+          marker: {
+            color: "#be123c",
+            size: 13,
+            symbol: "circle",
+            line: { color: "#fff1f2", width: 1.5 }
+          },
+          cliponaxis: false,
+          hovertemplate: "%{text}<extra></extra>"
+        });
+      }
+
+      return traces;
+    }
+
+    function buildInterceptAnnotations(notes = []) {
+      if (!Array.isArray(notes) || notes.length === 0) {
+        return [];
+      }
+
+      return [{
+        xref: "paper",
+        yref: "paper",
+        x: 0.02,
+        y: 0.98,
+        xanchor: "left",
+        yanchor: "top",
+        showarrow: false,
+        align: "left",
+        text: notes.join("<br>"),
+        bgcolor: "rgba(255, 250, 240, 0.9)",
+        bordercolor: "rgba(154, 52, 18, 0.18)",
+        borderwidth: 1,
+        font: {
+          family: "Outfit, sans-serif",
+          size: 12,
+          color: "#9a3412"
+        }
+      }];
+    }
+
     function spotlightSection(sectionEl) {
       document.querySelectorAll(".stage-card").forEach(card => {
         card.classList.remove("stage-focus");
@@ -732,11 +814,79 @@
       return polynomialEquation(data.coefficients || []);
     }
 
+    function escapeMathText(value) {
+      return String(value ?? "").replace(/\\/g, "\\\\").replace(/([{}_#$%&])/g, "\\$1");
+    }
+
+    function formatMathAxisLabel(label) {
+      const raw = String(label ?? "").trim();
+      if (!raw) return "x";
+
+      const logMatch = raw.match(/^ln\((.+)\)$/);
+      if (logMatch) {
+        return `\\ln\\left(${formatMathAxisLabel(logMatch[1])}\\right)`;
+      }
+
+      const reciprocalWrappedMatch = raw.match(/^1\/\((.+)\)$/);
+      if (reciprocalWrappedMatch) {
+        return `\\frac{1}{${formatMathAxisLabel(reciprocalWrappedMatch[1])}}`;
+      }
+
+      const reciprocalMatch = raw.match(/^1\/(.+)$/);
+      if (reciprocalMatch) {
+        return `\\frac{1}{${formatMathAxisLabel(reciprocalMatch[1])}}`;
+      }
+
+      const powerMatch = raw.match(/^(.+)\^(-?\d+)$/);
+      if (powerMatch) {
+        return `${formatMathAxisLabel(powerMatch[1])}^{${powerMatch[2]}}`;
+      }
+
+      return raw.length === 1 && /^[A-Za-z]$/.test(raw)
+        ? raw
+        : `\\mathrm{${escapeMathText(raw)}}`;
+    }
+
+    function renderLinearizedEquation(data) {
+      const DISPLAY_DIGITS = 3;
+      const eps = 1e-12;
+      const yLabel = formatMathAxisLabel(data.y_axis_label || "y");
+      const xLabel = formatMathAxisLabel(data.x_axis_label || "x");
+      const slope = Number((data.slope ?? 0).toFixed(DISPLAY_DIGITS));
+      const intercept = Number((data.intercept ?? 0).toFixed(DISPLAY_DIGITS));
+
+      const terms = [];
+
+      if (Math.abs(slope) >= eps) {
+        const absSlope = Math.abs(slope);
+        const absSlopeStr = absSlope.toFixed(DISPLAY_DIGITS);
+        const body = Math.abs(absSlope - 1) < eps ? xLabel : `${absSlopeStr}${xLabel}`;
+        terms.push({ sign: slope < 0 ? -1 : 1, body });
+      }
+
+      if (Math.abs(intercept) >= eps || terms.length === 0) {
+        terms.push({
+          sign: intercept < 0 ? -1 : 1,
+          body: Math.abs(intercept).toFixed(DISPLAY_DIGITS)
+        });
+      }
+
+      const formattedTerms = terms.map((term, index) => {
+        if (index === 0) return term.sign < 0 ? `-${term.body}` : term.body;
+        return term.sign < 0 ? ` - ${term.body}` : ` + ${term.body}`;
+      }).join("");
+
+      return `${yLabel} = ${formattedTerms}`;
+    }
+
     async function renderRegressionGraph(data, formData) {
       const xCol = formData.get("x_col");
       const yCol = formData.get("y_col");
       const modelType = data.model_type || formData.get("model_type") || "polynomial";
       const degree = data.degree;
+      const interceptTraces = buildInterceptTraces(data.intercept_points || []);
+      const regressionLayout = buildPlotLayout(`Regression of ${yCol} vs ${xCol}`, xCol, yCol);
+      regressionLayout.annotations = buildInterceptAnnotations(data.intercept_notes || []);
       const curveName = modelType === "polynomial"
         ? `Degree ${degree} fit`
         : modelType === "inverse"
@@ -762,7 +912,7 @@
           name: curveName,
           line: { color: "#0f6e63", width: 4 }
         }
-      ], buildPlotLayout(`Regression of ${yCol} vs ${xCol}`, xCol, yCol), {
+      ].concat(interceptTraces), regressionLayout, {
         responsive: true,
         displaylogo: false
       });
@@ -781,6 +931,9 @@
 
     async function renderLinearizedGraph(data) {
       linearizedSectionEl.style.display = "block";
+      const interceptTraces = buildInterceptTraces(data.intercept_points || []);
+      const linearizedLayout = buildPlotLayout(`${data.transform_label} Linearization`, data.x_axis_label, data.y_axis_label);
+      linearizedLayout.annotations = buildInterceptAnnotations(data.intercept_notes || []);
 
       await Plotly.newPlot(linearPlotEl, [
         {
@@ -801,12 +954,18 @@
           name: "Linear fit",
           line: { color: "#0b584f", width: 4 }
         }
-      ], buildPlotLayout(`${data.transform_label} Linearization`, data.x_axis_label, data.y_axis_label), {
+      ].concat(interceptTraces), linearizedLayout, {
         responsive: true,
         displaylogo: false
       });
 
-      linearEquationEl.textContent = `Line: ${data.equation_text}`;
+      const linearEquationStr = renderLinearizedEquation(data);
+      linearEquationEl.innerHTML = `Equation: $$${linearEquationStr}$$`;
+
+      if (window.MathJax) {
+        await MathJax.typesetPromise([linearEquationEl]);
+      }
+
       const linearStatsSummary = [
         `${data.selection_mode === "automatic" ? "Automatic" : "Manual"} selection`,
         `Transform: ${data.transform_label}`,
