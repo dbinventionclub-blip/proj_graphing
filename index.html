@@ -17,46 +17,90 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <main class="page">
-    <section class="hero hero-card card">
+  <div class="site-chrome" aria-hidden="true">
+    <span class="chrome-grid"></span>
+    <span class="chrome-orb chrome-orb-a"></span>
+    <span class="chrome-orb chrome-orb-b"></span>
+  </div>
+
+  <main class="page" id="top">
+    <header class="masthead">
+      <a class="brand" href="#top" aria-label="Return to top">
+        <span class="brand-mark">RG</span>
+        <span class="brand-copy">
+          <span class="eyebrow">Regression Studio</span>
+          <span class="brand-name">Fitted curves, editable tables, transformed views</span>
+        </span>
+      </a>
+      <div class="masthead-meta" aria-label="Capabilities">
+        <span>CSV + XLSX ingest</span>
+        <span>Handsontable editing</span>
+        <span>Instant fit review</span>
+      </div>
+    </header>
+
+    <section class="hero-shell card">
       <div class="hero-copy">
-        <p class="eyebrow">Data Modeling Lab</p>
-        <h1>Turn regression graphing into something that feels engineered, not improvised.</h1>
-        <p>Upload a spreadsheet or open a blank table, tune the fit you want, and jump straight to each result the second it renders.</p>
-        <div class="hero-pills">
-          <span>CSV + Excel ingest</span>
-          <span>Manual two-column entry</span>
-          <span>Regression + linearization</span>
+        <p class="eyebrow">Precision Graphing</p>
+        <h1>Build the fit, inspect the transform, and keep the data in view the whole time.</h1>
+        <p>Use a spreadsheet or open a blank table, set the curve family, then move straight into regression and linearized output without leaving the same workspace.</p>
+        <div class="hero-actions">
+          <a class="hero-link" href="#controlPanel">Configure inputs</a>
+          <a class="hero-link hero-link-secondary" href="#regressionSection">Jump to outputs</a>
         </div>
       </div>
-      <div class="hero-grid">
-        <article class="hero-stat">
-          <span class="stat-label">Manual Entry</span>
-          <strong>Blank table on demand</strong>
-          <p>No file required. The table builder prompts for both headers before it opens.</p>
+
+      <div class="hero-panels" aria-label="Workflow highlights">
+        <article class="hero-panel">
+          <span class="hero-index">01</span>
+          <strong>One active dataset</strong>
+          <p>The visible sheet is the source of truth, whether it came from an upload or was keyed in by hand.</p>
         </article>
-        <article class="hero-stat">
-          <span class="stat-label">Automatic Motion</span>
-          <strong>Results pull you in</strong>
-          <p>Each generate action scrolls to the graph that was just created and highlights it.</p>
+        <article class="hero-panel">
+          <span class="hero-index">02</span>
+          <strong>Model control stays local</strong>
+          <p>Polynomial, inverse, and exponential fits stay in the left rail so the output lane remains uncluttered.</p>
         </article>
-        <article class="hero-stat">
-          <span class="stat-label">Linearization</span>
-          <strong>Manual or automatic</strong>
-          <p>Choose the transform yourself or let the app keep the strongest straight-line fit.</p>
+        <article class="hero-panel">
+          <span class="hero-index">03</span>
+          <strong>Linearization stays comparable</strong>
+          <p>Manual transforms and automatic selection produce a clean straight-line reference next to the primary curve.</p>
+        </article>
+      </div>
+
+      <div class="hero-band">
+        <article class="hero-band-item">
+          <span class="band-label">Manual entry</span>
+          <strong>Prompted column headers</strong>
+          <p>Create a two-column table without importing a file.</p>
+        </article>
+        <article class="hero-band-item">
+          <span class="band-label">Regression output</span>
+          <strong>Equation + chart in one surface</strong>
+          <p>Rendered output stays attached to the same model request.</p>
+        </article>
+        <article class="hero-band-item">
+          <span class="band-label">Transform review</span>
+          <strong>R<sup>2</sup> stays visible</strong>
+          <p>Compare transformed fits without digging into raw values.</p>
         </article>
       </div>
     </section>
 
     <section class="workspace">
       <aside class="control-rail">
-        <section class="card panel panel-primary">
-          <p class="section-kicker">Regression Setup</p>
-          <h2>Shape the dataset</h2>
-          <p class="form-hint">Supports CSV and Excel files. You can also open the table below and enter values manually.</p>
+        <section class="card panel panel-primary" id="controlPanel">
+          <div class="panel-topline">
+            <p class="section-kicker">Regression Setup</p>
+            <span class="panel-badge">Input Rail</span>
+          </div>
+          <h2>Compose the dataset and choose the curve family.</h2>
+          <p class="form-hint">Supports CSV and Excel files. You can also open a blank sheet below and enter values directly into the table.</p>
+          <div id="feedbackBanner" class="feedback-banner" aria-live="polite" hidden></div>
+
           <div class="notice-strip">
             <span class="notice-dot"></span>
-            <p>X and Y column names must match the table headers exactly.</p>
+            <p>Match the X and Y field names to the table headers that are currently active before you generate a fit.</p>
           </div>
 
           <form id="uploadForm">
@@ -91,7 +135,7 @@
               <input type="number" name="degree" id="degreeInput" value="1" min="1">
             </div>
 
-            <button type="submit">Generate Regression Graph</button>
+            <button id="regressionSubmitBtn" type="submit">Generate Regression Graph</button>
           </form>
 
           <div class="panel-divider"></div>
@@ -125,27 +169,47 @@
         </section>
 
         <section class="card helper-card">
-          <p class="section-kicker">Studio Notes</p>
-          <h3>Fast workflow</h3>
+          <p class="section-kicker">Workflow Notes</p>
+          <h3>Everything stays in one lab lane.</h3>
           <ul class="helper-list">
-            <li>Use <strong>Show Table</strong> without an upload to create a blank sheet and enter values manually.</li>
-            <li>Regression and linearization both use the edited spreadsheet currently shown on the page.</li>
-            <li>Automatic linearization tests the valid transforms and keeps the one with the strongest <code>R^2</code>.</li>
+            <li><strong>Show Table</strong> opens a clean editable grid if you do not want to upload a file.</li>
+            <li>The graph requests always use the data visible in the spreadsheet, including any edits made after upload.</li>
+            <li>Automatic linearization tests the valid transforms and keeps the strongest straight-line fit by <code>R^2</code>.</li>
           </ul>
         </section>
       </aside>
 
       <section class="stage">
+        <section class="card stage-intro">
+          <div>
+            <p class="section-kicker">Output Lane</p>
+            <h2>Results stay grouped by curve fit, editable data, and transformed view.</h2>
+          </div>
+          <div class="stage-links">
+            <a href="#regressionSection">Regression Fit</a>
+            <a href="#dataTableSection">Editable Table</a>
+            <a href="#linearizedSection">Linearized View</a>
+          </div>
+        </section>
+
         <section class="card plot-shell stage-card" id="regressionSection">
           <div class="plot-header">
             <div class="heading-stack">
               <p class="section-kicker">Primary Output</p>
               <h2>Regression Graph</h2>
             </div>
-            <span class="status-badge">Curve + equation</span>
+            <div class="header-meta">
+              <span class="status-badge">Curve + equation</span>
+              <span id="regressionStatus" class="status-pill" data-state="idle" aria-live="polite">Waiting for input</span>
+            </div>
           </div>
           <div class="equation-wrap">
-            <div class="equation-label">Best-fit equation</div>
+            <div class="equation-meta">
+              <div>
+                <div class="equation-label">Best-fit equation</div>
+                <div class="equation-note">Rendered after the regression request completes.</div>
+              </div>
+            </div>
             <div id="equation">Run a regression to populate the fitted equation.</div>
           </div>
           <div id="plot"></div>
@@ -157,9 +221,12 @@
               <p class="section-kicker">Editable Dataset</p>
               <h2>Data Table</h2>
             </div>
-            <button id="toggleTableBtn" class="table-toggle" type="button" aria-expanded="false">
-              Show Table
-            </button>
+            <div class="header-meta">
+              <span class="status-badge">Live source sheet</span>
+              <button id="toggleTableBtn" class="table-toggle" type="button" aria-expanded="false">
+                Show Table
+              </button>
+            </div>
           </div>
           <p class="table-hint">Upload a file to preview and edit it, or click <strong>Show Table</strong> to create a blank table and enter values by hand.</p>
           <div id="tableContainer">
@@ -173,10 +240,18 @@
               <p class="section-kicker">Secondary Output</p>
               <h2>Linearized Graph</h2>
             </div>
-            <span class="status-badge">Transform + R^2</span>
+            <div class="header-meta">
+              <span class="status-badge">Transform + R^2</span>
+              <span id="linearStatus" class="status-pill" data-state="idle" aria-live="polite">Waiting for transform</span>
+            </div>
           </div>
           <div class="equation-wrap">
-            <div class="equation-label">Linearized equation</div>
+            <div class="equation-meta">
+              <div>
+                <div class="equation-label">Linearized equation</div>
+                <div class="equation-note">Manual or automatic mode keeps the selected transform visible.</div>
+              </div>
+            </div>
             <div id="linearEquation">Generate a linearized graph to inspect the transformed line.</div>
             <div id="linearStats" class="metric-line">Choose a mode, then generate a linearized graph.</div>
           </div>
@@ -207,11 +282,44 @@
     const linearEquationEl = document.getElementById("linearEquation");
     const linearStatsEl = document.getElementById("linearStats");
     const linearPlotEl = document.getElementById("linearPlot");
+    const equationEl = document.getElementById("equation");
+    const regressionSubmitBtnEl = document.getElementById("regressionSubmitBtn");
+    const feedbackBannerEl = document.getElementById("feedbackBanner");
+    const regressionStatusEl = document.getElementById("regressionStatus");
+    const linearStatusEl = document.getElementById("linearStatus");
     const linearizationHintCodeEl = document.querySelector(".panel .form-hint code");
 
     let hotInstance = null;
     let isTableExpanded = false;
     let stageFocusTimer = null;
+
+    function setFeedback(message = "", tone = "info") {
+      if (!feedbackBannerEl) return;
+
+      if (!message) {
+        feedbackBannerEl.hidden = true;
+        feedbackBannerEl.textContent = "";
+        feedbackBannerEl.removeAttribute("data-tone");
+        return;
+      }
+
+      feedbackBannerEl.hidden = false;
+      feedbackBannerEl.textContent = message;
+      feedbackBannerEl.dataset.tone = tone;
+    }
+
+    function setButtonBusy(buttonEl, busy, idleLabel, busyLabel) {
+      if (!buttonEl) return;
+      buttonEl.disabled = busy;
+      buttonEl.dataset.busy = busy ? "true" : "false";
+      buttonEl.textContent = busy ? busyLabel : idleLabel;
+    }
+
+    function setStatusPill(targetEl, text, state) {
+      if (!targetEl) return;
+      targetEl.textContent = text;
+      targetEl.dataset.state = state;
+    }
 
     function syncDegreeVisibility() {
       const modelType = modelTypeEl.value;
@@ -400,6 +508,7 @@
         headers,
         bodyRows: createBlankRows(headers.length)
       }, { expand: true });
+      setFeedback("Blank table ready. Enter values, then generate a graph.", "success");
       return true;
     }
 
@@ -438,17 +547,23 @@
 
     function validateDataReady() {
       if (!xColInputEl.value.trim() || !yColInputEl.value.trim()) {
-        alert("Enter both column names before generating a graph.");
+        const message = "Enter both column names before generating a graph.";
+        setFeedback(message, "error");
+        alert(message);
         return false;
       }
 
       if (!fileInputEl.files?.[0] && !hotInstance) {
-        alert("Upload a file or click Show Table to enter data manually.");
+        const message = "Upload a file or click Show Table to enter data manually.";
+        setFeedback(message, "error");
+        alert(message);
         return false;
       }
 
       if (hotInstance && getTrimmedTableBody().length === 0) {
-        alert("Enter at least one row of data in the table before generating a graph.");
+        const message = "Enter at least one row of data in the table before generating a graph.";
+        setFeedback(message, "error");
+        alert(message);
         return false;
       }
 
@@ -482,37 +597,37 @@
           font: {
             family: "Space Grotesk, sans-serif",
             size: 20,
-            color: "#0f172a"
+            color: "#162231"
           }
         },
         template: "plotly_white",
         paper_bgcolor: "rgba(0,0,0,0)",
-        plot_bgcolor: "#f8fbff",
+        plot_bgcolor: "#f6f1e9",
         margin: { t: 72, r: 28, b: 60, l: 72 },
         font: {
           family: "Outfit, sans-serif",
-          color: "#0f172a"
+          color: "#162231"
         },
         legend: {
           orientation: "h",
           x: 1,
           xanchor: "right",
           y: 1.14,
-          bgcolor: "rgba(255,255,255,0.9)",
-          bordercolor: "rgba(148,163,184,0.25)",
+          bgcolor: "rgba(251,248,243,0.92)",
+          bordercolor: "rgba(22,34,49,0.12)",
           borderwidth: 1
         },
         xaxis: {
           title: xAxisTitle,
-          gridcolor: "rgba(148,163,184,0.18)",
-          zerolinecolor: "rgba(148,163,184,0.22)",
-          linecolor: "rgba(100,116,139,0.32)"
+          gridcolor: "rgba(22,34,49,0.12)",
+          zerolinecolor: "rgba(22,34,49,0.16)",
+          linecolor: "rgba(22,34,49,0.22)"
         },
         yaxis: {
           title: yAxisTitle,
-          gridcolor: "rgba(148,163,184,0.18)",
-          zerolinecolor: "rgba(148,163,184,0.22)",
-          linecolor: "rgba(100,116,139,0.32)"
+          gridcolor: "rgba(22,34,49,0.12)",
+          zerolinecolor: "rgba(22,34,49,0.16)",
+          linecolor: "rgba(22,34,49,0.22)"
         }
       };
     }
@@ -635,9 +750,9 @@
           mode: "markers",
           name: "Data",
           marker: {
-            color: "#14b8a6",
+            color: "#233244",
             size: 8,
-            line: { color: "#ecfeff", width: 1.5 }
+            line: { color: "#f7f3eb", width: 1.5 }
           }
         },
         {
@@ -645,7 +760,7 @@
           y: data.y_curve,
           mode: "lines",
           name: curveName,
-          line: { color: "#2563eb", width: 4 }
+          line: { color: "#0f6e63", width: 4 }
         }
       ], buildPlotLayout(`Regression of ${yCol} vs ${xCol}`, xCol, yCol), {
         responsive: true,
@@ -653,12 +768,14 @@
       });
 
       const equationStr = renderRegressionEquation(data, modelType);
-      document.getElementById("equation").innerHTML = `equation: $$${equationStr}$$`;
+      equationEl.innerHTML = `Equation: $$${equationStr}$$`;
 
       if (window.MathJax) {
-        await MathJax.typesetPromise([document.getElementById("equation")]);
+        await MathJax.typesetPromise([equationEl]);
       }
 
+      setStatusPill(regressionStatusEl, "Regression updated", "done");
+      setFeedback("Regression graph rendered from the active dataset.", "success");
       spotlightSection(regressionSectionEl);
     }
 
@@ -672,9 +789,9 @@
           mode: "markers",
           name: "Transformed data",
           marker: {
-            color: "#f97316",
+            color: "#667789",
             size: 8,
-            line: { color: "#fff7ed", width: 1.5 }
+            line: { color: "#f7f3eb", width: 1.5 }
           }
         },
         {
@@ -682,7 +799,7 @@
           y: data.y_curve,
           mode: "lines",
           name: "Linear fit",
-          line: { color: "#7c3aed", width: 4 }
+          line: { color: "#0b584f", width: 4 }
         }
       ], buildPlotLayout(`${data.transform_label} Linearization`, data.x_axis_label, data.y_axis_label), {
         responsive: true,
@@ -697,12 +814,17 @@
       ].join(" | ");
       linearStatsEl.textContent = linearStatsSummary;
 
+      setStatusPill(linearStatusEl, "Linearized view updated", "done");
+      setFeedback("Linearized graph rendered from the active dataset.", "success");
       spotlightSection(linearizedSectionEl);
     }
 
+    setFeedback("");
     normalizeLinearizationLabels();
     syncDegreeVisibility();
     syncLinearizationVisibility();
+    setStatusPill(regressionStatusEl, "Waiting for input", "idle");
+    setStatusPill(linearStatusEl, "Waiting for transform", "idle");
     modelTypeEl.addEventListener("change", syncDegreeVisibility);
     linearizationModeEl.addEventListener("change", syncLinearizationVisibility);
 
@@ -726,9 +848,12 @@
       try {
         const rows = await parseSpreadsheet(file);
         renderEditableTable(rows);
+        setFeedback(`Loaded ${file.name} into the editable table.`, "success");
       } catch (err) {
         console.error(err);
-        alert(`Could not preview this file as a table: ${err.message}`);
+        const message = `Could not preview this file as a table: ${err.message}`;
+        setFeedback(message, "error");
+        alert(message);
       }
     });
 
@@ -739,6 +864,11 @@
         return;
       }
 
+      setFeedback("Running regression on the active dataset.", "info");
+      setStatusPill(regressionStatusEl, "Running fit", "working");
+      setButtonBusy(regressionSubmitBtnEl, true, "Generate Regression Graph", "Computing Regression...");
+      regressionSectionEl.classList.add("card-loading");
+
       try {
         const formData = buildRequestFormData();
         const response = await fetch("/regression", {
@@ -748,14 +878,23 @@
 
         const data = await response.json();
         if (!response.ok) {
-          alert(data.error || "Regression failed");
+          const message = data.error || "Regression failed";
+          setStatusPill(regressionStatusEl, "Request failed", "error");
+          setFeedback(message, "error");
+          alert(message);
           return;
         }
 
         await renderRegressionGraph(data, formData);
       } catch (err) {
         console.error(err);
-        alert(err.message || "Regression failed");
+        const message = err.message || "Regression failed";
+        setStatusPill(regressionStatusEl, "Request failed", "error");
+        setFeedback(message, "error");
+        alert(message);
+      } finally {
+        setButtonBusy(regressionSubmitBtnEl, false, "Generate Regression Graph", "Computing Regression...");
+        regressionSectionEl.classList.remove("card-loading");
       }
     });
 
@@ -763,6 +902,11 @@
       if (!validateDataReady()) {
         return;
       }
+
+      setFeedback("Running linearization on the active dataset.", "info");
+      setStatusPill(linearStatusEl, "Transforming data", "working");
+      setButtonBusy(linearizeBtnEl, true, "Generate Linearized Graph", "Computing Linearization...");
+      linearizedSectionEl.classList.add("card-loading");
 
       try {
         const formData = buildRequestFormData({
@@ -777,14 +921,23 @@
 
         const data = await response.json();
         if (!response.ok) {
-          alert(data.error || "Linearization failed");
+          const message = data.error || "Linearization failed";
+          setStatusPill(linearStatusEl, "Request failed", "error");
+          setFeedback(message, "error");
+          alert(message);
           return;
         }
 
         await renderLinearizedGraph(data);
       } catch (err) {
         console.error(err);
-        alert(err.message || "Linearization failed");
+        const message = err.message || "Linearization failed";
+        setStatusPill(linearStatusEl, "Request failed", "error");
+        setFeedback(message, "error");
+        alert(message);
+      } finally {
+        setButtonBusy(linearizeBtnEl, false, "Generate Linearized Graph", "Computing Linearization...");
+        linearizedSectionEl.classList.remove("card-loading");
       }
     });
   </script>
