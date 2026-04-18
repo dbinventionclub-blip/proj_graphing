@@ -860,7 +860,7 @@
       if (Math.abs(slope) >= eps) {
         const absSlope = Math.abs(slope);
         const absSlopeStr = absSlope.toFixed(DISPLAY_DIGITS);
-        const body = Math.abs(absSlope - 1) < eps ? xLabel : `${absSlopeStr}${xLabel}`;
+        const body = Math.abs(absSlope - 1) < eps ? xLabel : `${absSlopeStr}x`;
         terms.push({ sign: slope < 0 ? -1 : 1, body });
       }
 
@@ -876,7 +876,7 @@
         return term.sign < 0 ? ` - ${term.body}` : ` + ${term.body}`;
       }).join("");
 
-      return `${yLabel} = ${formattedTerms}`;
+      return `y = ${formattedTerms}`;
     }
 
     async function renderRegressionGraph(data, formData) {
