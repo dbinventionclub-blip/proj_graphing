@@ -13,16 +13,19 @@ import os
 app = Flask(__name__)
 CORS(app)
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PUBLIC_DIR = os.path.join(BASE_DIR, "public")
+
 PLOT_SAMPLE_COUNT = 600
 INTERCEPT_TOL = 1e-9
 
 @app.route("/", methods=["GET"])
 def root():
-    return send_from_directory(os.path.dirname(__file__), "index.html")
+    return send_from_directory(PUBLIC_DIR, "index.html")
 
 @app.route("/styles.css", methods=["GET"])
 def styles():
-    return send_from_directory(os.path.dirname(__file__), "styles.css")
+    return send_from_directory(PUBLIC_DIR, "styles.css")
 
 @app.route("/health", methods=["GET"])
 def health():
