@@ -1,9 +1,33 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/favicon.ico",
+      "destination": "/favicon.svg",
+      "permanent": false
+    },
+    {
+      "source": "/favicon.png",
+      "destination": "/favicon.svg",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
-      "source": "/(.*)",
-      "destination": "/api/index.py"
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/regression",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/linearize",
+      "destination": "/api/index"
     }
   ]
 }
