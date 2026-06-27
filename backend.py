@@ -1,7 +1,7 @@
 # backend.py
 import pandas as pd
 import numpy as np
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, redirect, send_from_directory
 import plotly
 from sklearn.linear_model import LinearRegression
 import plotly.graph_objects as go
@@ -21,6 +21,8 @@ INTERCEPT_TOL = 1e-9
 
 @app.route("/", methods=["GET"])
 def root():
+    if not os.path.exists(os.path.join(PUBLIC_DIR, "index.html")):
+        return redirect("/index.html", code=302)
     return send_from_directory(PUBLIC_DIR, "index.html")
 
 @app.route("/styles.css", methods=["GET"])
